@@ -63,6 +63,23 @@ else
 fi
 
 echo
+echo "== reading class names out of the game =="
+# Pure JVM, no device: the verdict this produces decides whether reaching the
+# game's own code is worth attempting at all.
+( cd "$root" && gradle --console=plain -q :app:testReleaseUnitTest ) && \
+    python3 - "$root" <<'REPORT'
+import glob, re, sys
+for path in glob.glob(sys.argv[1] + "/app/build/test-results/testReleaseUnitTest/*.xml"):
+    text = open(path).read()
+    counts = re.search(r'tests="(\d+)".*?failures="(\d+)".*?errors="(\d+)"', text)
+    for name in re.findall(r'testcase name="([^"]+)"', text):
+        print("  ok    " + name)
+    print("  %s checks, %s failures, %s errors" % counts.groups())
+    if counts.group(2) != "0" or counts.group(3) != "0":
+        sys.exit(1)
+REPORT
+
+echo
 echo "== the loader version says the same thing everywhere =="
 # A mod declares which loader versions it works with, so this number carries
 # meaning; three copies of it that can drift apart would make that meaningless.

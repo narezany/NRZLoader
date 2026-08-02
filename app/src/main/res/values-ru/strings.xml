@@ -72,4 +72,8 @@
     <string name="mod_settings">Настройки</string>
     <string name="mod_settings_save">Сохранить</string>
     <string name="mod_needs_loader">Нужен загрузчик %1$s, здесь %2$s</string>
+    <string name="probe_title">Заглянуть внутрь игры</string>
+    <string name="probe_body">Проверяет, остались ли в игре имена её собственных классов. От этого зависит, можно ли вообще добраться модами до геймплея. Никуда ничего не отправляется.</string>
+    <string name="probe_action">Проверить</string>
+    <string name="probe_running">Читаю библиотеку игры, это примерно минута…</string>
 </resources>

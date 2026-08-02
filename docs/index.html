@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NRZLoader — загрузчик модов для Minecraft Bedrock на Android</title>
+<meta name="description" content="Патчер и лаунчер: моды, экранные эффекты и плавающие окна для Minecraft Bedrock на Android.">
+<style>
+:root {
+  --bg: #fbfaf8;
+  --panel: #ffffff;
+  --line: #e4e0d8;
+  --text: #1c1b19;
+  --dim: #6a655d;
+  --accent: #2f6f4f;
+  --accent-soft: #e8f2ec;
+  --code-bg: #f4f2ee;
+  --warn-bg: #fdf3e7;
+  --warn-line: #e8c9a0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181a;
+    --panel: #1e2124;
+    --line: #2f3438;
+    --text: #e8e6e3;
+    --dim: #9aa0a6;
+    --accent: #7fd1a4;
+    --accent-soft: #1d2b24;
+    --code-bg: #14171a;
+    --warn-bg: #2a2118;
+    --warn-line: #57432a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16181a; --panel: #1e2124; --line: #2f3438; --text: #e8e6e3;
+  --dim: #9aa0a6; --accent: #7fd1a4; --accent-soft: #1d2b24;
+  --code-bg: #14171a; --warn-bg: #2a2118; --warn-line: #57432a;
+}
+:root[data-theme="light"] {
+  --bg: #fbfaf8; --panel: #ffffff; --line: #e4e0d8; --text: #1c1b19;
+  --dim: #6a655d; --accent: #2f6f4f; --accent-soft: #e8f2ec;
+  --code-bg: #f4f2ee; --warn-bg: #fdf3e7; --warn-line: #e8c9a0;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap { display: flex; max-width: 1180px; margin: 0 auto; gap: 40px; padding: 0 20px; }
+
+nav {
+  width: 220px;
+  flex: 0 0 220px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 28px 0 40px;
+}
+nav .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+nav .ver { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+nav a {
+  display: block; padding: 5px 10px; margin-left: -10px; border-radius: 7px;
+  color: var(--dim); text-decoration: none; font-size: 14px;
+}
+nav a:hover { background: var(--accent-soft); color: var(--text); }
+nav .group { margin-top: 16px; font-size: 11px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--dim); opacity: .7; padding-left: 0; }
+
+main { flex: 1 1 auto; min-width: 0; padding: 28px 0 90px; }
+
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.02em; }
+h2 {
+  font-size: 22px; margin: 44px 0 12px; padding-top: 18px;
+  border-top: 1px solid var(--line); letter-spacing: -.01em;
+}
+h3 { font-size: 17px; margin: 26px 0 8px; }
+p, li { color: var(--text); }
+.lead { font-size: 18px; color: var(--dim); margin: 0 0 24px; }
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .88em; background: var(--code-bg); padding: .12em .38em;
+  border-radius: 5px; border: 1px solid var(--line);
+}
+pre {
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+}
+pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; margin: 14px 0; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+.scroll { overflow-x: auto; }
+
+.note, .warn {
+  border: 1px solid var(--line); background: var(--panel);
+  border-radius: 10px; padding: 14px 16px; margin: 16px 0;
+}
+.note { border-left: 3px solid var(--accent); }
+.warn { background: var(--warn-bg); border-left: 3px solid var(--warn-line); }
+.note p:last-child, .warn p:last-child { margin-bottom: 0; }
+.note p:first-child, .warn p:first-child { margin-top: 0; }
+
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps > li {
+  counter-increment: step; position: relative;
+  padding: 0 0 16px 40px; margin: 0;
+}
+.steps > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 1px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent);
+  display: grid; place-items: center; font-size: 13px; font-weight: 700;
+}
+
+a { color: var(--accent); }
+.tag {
+  display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+  background: var(--accent-soft); color: var(--accent); vertical-align: middle;
+  margin-left: 6px; letter-spacing: .03em;
+}
+footer { color: var(--dim); font-size: 13.5px; margin-top: 48px;
+  border-top: 1px solid var(--line); padding-top: 18px; }
+
+#toggle {
+  position: fixed; right: 14px; top: 14px; z-index: 5;
+  border: 1px solid var(--line); background: var(--panel); color: var(--dim);
+  border-radius: 20px; padding: 6px 13px; font: inherit; font-size: 13px; cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .wrap { display: block; padding: 0 16px; }
+  nav {
+    width: auto; position: static; max-height: none; padding: 18px 0 0;
+    border-bottom: 1px solid var(--line); margin-bottom: 8px;
+  }
+  nav .links { display: flex; flex-wrap: wrap; gap: 2px 4px; padding-bottom: 12px; }
+  nav .group { width: 100%; margin-top: 10px; }
+  nav a { margin-left: 0; padding: 4px 9px; background: var(--code-bg); }
+  main { padding-top: 12px; }
+  h1 { font-size: 25px; }
+  #toggle { position: static; margin: 14px 0 0; }
+}
+</style>
+</head>
+<body>
+
+<button id="toggle">тема</button>
+
+<div class="wrap">
+<nav>
+  <div class="brand">NRZLoader</div>
+  <div class="ver">версия 1.1.0</div>
+  <div class="links">
+    <a href="#start">С чего начать</a>
+    <a href="#install">Установка</a>
+    <a href="#perms">Разрешения</a>
+    <a href="#mods">Куда класть моды</a>
+
+    <div class="group">Написать мод</div>
+    <a href="#package">Формат .nrzmod</a>
+    <a href="#manifest">mod.json целиком</a>
+    <a href="#api">Что умеет мод</a>
+    <a href="#fx">Экранные эффекты</a>
+    <a href="#shader">Свой шейдер</a>
+    <a href="#windows">Окна поверх игры</a>
+    <a href="#native">Нативные моды</a>
+
+    <div class="group">Подробности</div>
+    <a href="#config">Настройки загрузчика</a>
+    <a href="#versions">Версии</a>
+    <a href="#limits">Чего он не может</a>
+    <a href="#build">Сборка из исходников</a>
+    <a href="#legal">Правовая сторона</a>
+  </div>
+</nav>
+
+<main>
+
+<h1>NRZLoader</h1>
+<p class="lead">
+Моды для Minecraft Bedrock на Android. Приложение берёт игру, которая уже стоит
+у вас на телефоне, и собирает из неё версию, умеющую загружать моды. Ассеты
+игры никуда не копируются и ничего не скачивается.
+</p>
+
+<div class="scroll">
+<table>
+<tr><th>Нужно</th><th>Что именно</th></tr>
+<tr><td>Устройство</td><td>Android 8 и новее, <b>arm64</b> — это почти любой телефон после 2017 года</td></tr>
+<tr><td>Игра</td><td>Minecraft Bedrock, установленный обычным образом</td></tr>
+<tr><td>Место</td><td>около двух размеров игры на время сборки</td></tr>
+<tr><td>Компьютер</td><td>не нужен</td></tr>
+</table>
+</div>
+
+<h2 id="start">С чего начать</h2>
+<p>
+Скачайте <code>NRZLoader.apk</code> из папки <code>dist/</code>
+<a href="https://github.com/narezany/NRZLoader">в репозитории</a> и поставьте
+его. Это лаунчер: он ничего не меняет в игре сам по себе, пока вы не нажмёте
+кнопку.
+</p>
+
+<h2 id="install">Установка</h2>
+<ol class="steps">
+<li>
+  <b>Дайте лаунчеру доступ к файлам.</b> Без него он не сможет ни прочитать
+  игру, ни создать папку для модов. Кнопка на главном экране.
+</li>
+<li>
+  <b>Нажмите «Собрать моднутую версию».</b> Это занимает несколько минут:
+  игра весит сотни мегабайт, и её приходится переупаковать целиком. Из
+  приложения можно выйти — сборка идёт в фоне и показывает прогресс в шторке.
+</li>
+<li>
+  <b>Удалите оригинал.</b> Кнопка появится сама. Это обязательно: пересобранный
+  пакет подписан другим ключом, и поверх старого он не встанет — установщик
+  скажет «повреждённый пакет». <b>Миры и настройки при этом остаются на месте</b>,
+  они лежат отдельно от самой игры.
+</li>
+<li>
+  <b>Установите пересобранную.</b> Вторая кнопка. Android спросит разрешение
+  ставить приложения из этого источника — это нормально.
+</li>
+<li>
+  <b>Дайте доступ к файлам самой игре.</b> Отдельная кнопка в лаунчере. Игра
+  попросила бы сама, но гораздо позже, и моды до тех пор не подхватились бы.
+</li>
+</ol>
+
+<div class="warn">
+<p>
+<b>Про обновления игры.</b> Когда Play Маркет обновит Minecraft, он поставит
+обычную версию поверх моднутой, и моды отвалятся. Собирайте заново после
+каждого обновления — лаунчер увидит, что игра собрана старым загрузчиком, и
+скажет об этом.
+</p>
+</div>
+
+<h2 id="perms">Разрешения и зачем каждое</h2>
+<div class="scroll">
+<table>
+<tr><th>Разрешение</th><th>Кому</th><th>Зачем</th></tr>
+<tr>
+  <td>Доступ ко всем файлам</td><td>лаунчеру</td>
+  <td>прочитать пакет игры и создать папку <code>NRZLoader/</code></td>
+</tr>
+<tr>
+  <td>Доступ ко всем файлам</td><td>игре</td>
+  <td>чтобы загрузчик внутри игры видел моды и писал лог</td>
+</tr>
+<tr>
+  <td>Уведомления</td><td>лаунчеру</td>
+  <td>показывать прогресс сборки, когда вы вышли из приложения</td>
+</tr>
+<tr>
+  <td>Поверх других приложений</td><td>игре</td>
+  <td>только если мод рисует своё окно; без него всё остальное работает</td>
+</tr>
+</table>
+</div>
+
+<h2 id="mods">Куда класть моды</h2>
+<p>Загрузчик создаёт папку в корне памяти телефона:</p>
+<pre><code>/sdcard/NRZLoader/
+├── mods/          сюда моды
+├── config/        настройки загрузчика и самих модов
+├── reports/       то, что моды и проверки сюда записали
+└── loader.log     лог, открывается любым проводником</code></pre>
+
+<p>
+Мод в формате <code>.nrzmod</code> ставится проще: нажмите на файл в любом
+проводнике, лаунчер предложит установить. Отдельные <code>.js</code> и
+<code>.so</code> можно просто положить в <code>mods/</code>.
+</p>
+<p>
+На вкладке «Моды» у каждого мода есть переключатель. Выключенный мод остаётся
+на месте — его id просто попадает в <code>config/disabled.txt</code>, и
+загрузчик его пропускает.
+</p>
+
+<div class="note">
+<p>
+<b>Если что-то не работает</b> — смотрите вкладку «Лог». Загрузчик пишет туда
+всё: какие моды нашёл, какие пропустил и почему, что смог перехватить.
+</p>
+</div>
+
+<h2 id="package">Формат .nrzmod</h2>
+<p>
+Это обычный zip, переименованный в <code>.nrzmod</code>. Внутри:
+</p>
+<pre><code>mod.json     обязательно — описание мода
+main.js      код
+icon.png     иконка для карточки в лаунчере</code></pre>
+<p>
+Собрать можно чем угодно, хоть архиватором на телефоне. Файлы должны лежать
+в корне архива, а не в папке внутри него.
+</p>
+
+<h2 id="manifest">mod.json целиком</h2>
+<pre><code>{
+  "id": "nrz.example",
+  "name": "Пример",
+  "version": "1.0.0",
+  "author": "кто-то",
+  "description": "что он делает",
+
+  "minLoader": "1.1.0",
+  "maxLoader": "2.0.0",
+
+  "links": [
+    { "label": "GitHub",  "url": "https://github.com/..." },
+    { "label": "Discord", "url": "https://discord.gg/..." }
+  ],
+
+  "settings": [
+    { "key": "enabled", "label": "Включено", "type": "toggle", "default": true },
+    { "key": "power",   "label": "Сила",     "type": "slider",
+      "min": 0, "max": 1, "default": 0.5 },
+    { "key": "mode",    "label": "Режим",    "type": "choice",
+      "options": ["а", "б"], "default": "а" },
+    { "key": "name",    "label": "Имя",      "type": "text", "default": "" }
+  ]
+}</code></pre>
+
+<div class="scroll">
+<table>
+<tr><th>Поле</th><th>Что делает</th></tr>
+<tr><td><code>id</code></td><td>обязательно, должно быть уникальным: по нему мод узнают настройки и переключатель</td></tr>
+<tr><td><code>minLoader</code>, <code>maxLoader</code></td>
+    <td>версии загрузчика, с которыми мод работает. Не подходит — лаунчер напишет об этом на карточке, а загрузчик такой мод не запустит</td></tr>
+<tr><td><code>links</code></td><td>кнопки на карточке мода. Берутся только <code>http</code> и <code>https</code></td></tr>
+<tr><td><code>settings</code></td><td>лаунчер сам нарисует контролы и положит выбранное в <code>config/&lt;id&gt;.json</code></td></tr>
+</table>
+</div>
+
+<p>Мод читает свои настройки одной строкой:</p>
+<pre><code>var options = nrz.readJson("config/nrz.example.json") || {};
+if (options.enabled) { /* ... */ }</code></pre>
+
+<div class="note">
+<p>
+Лаунчер про смысл настроек не знает ничего — он только рисует и записывает.
+Поэтому добавить настройку можно, не дожидаясь, пока лаунчер про неё узнает.
+</p>
+</div>
+
+<h2 id="api">Что умеет мод</h2>
+<p>
+Скриптовый мод — это JavaScript, который загрузчик запускает внутри игры. В
+каждом контексте лежит объект <code>nrz</code>.
+</p>
+
+<h3>Файлы и лог</h3>
+<pre><code>nrz.log("привет");                  // строка уйдёт в loader.log
+
+nrz.writeJson("state.json", { runs: 1 });
+var state = nrz.readJson("state.json");
+
+nrz.writeFile("notes.txt", "текст");
+var text = nrz.readFile("notes.txt");
+nrz.listDir(".");                   // массив имён
+nrz.deleteFile("notes.txt");
+
+nrz.info();                         // что вообще доступно</code></pre>
+
+<div class="note">
+<p>
+Файлы мода живут только внутри <code>NRZLoader/</code>. Мод — это код, который
+вы решили поставить, но это ещё не повод отдавать ему весь телефон.
+</p>
+</div>
+
+<h2 id="fx">Экранные эффекты</h2>
+<p>
+Загрузчик перехватывает момент, когда готовый кадр уходит в систему, копирует
+его в текстуру и рисует обратно через шейдер. Игре про это знать не нужно,
+поэтому эффекты не ломаются от её обновлений.
+</p>
+
+<pre><code>nrz.fx.set({ crt: 0.7, chroma: 0.3 });   // несколько сразу, сила от 0 до 1
+nrz.fx.clear();
+nrz.fx.info();                            // {names, active, shader, error, drawing}</code></pre>
+
+<div class="scroll">
+<table>
+<tr><th>Имя</th><th>Что делает</th></tr>
+<tr><td><code>crt</code></td><td>строчки развёртки и цветная маска старого монитора</td></tr>
+<tr><td><code>fisheye</code></td><td>рыбий глаз</td></tr>
+<tr><td><code>glitch</code></td><td>полосы уезжают вбок</td></tr>
+<tr><td><code>chroma</code></td><td>расслоение цвета по краям</td></tr>
+<tr><td><code>pixelate</code></td><td>крупные пиксели</td></tr>
+<tr><td><code>wave</code></td><td>картинка идёт волнами</td></tr>
+<tr><td><code>vignette</code></td><td>затемнение к краям</td></tr>
+<tr><td><code>grayscale</code></td><td>чёрно-белое</td></tr>
+<tr><td><code>invert</code></td><td>инверсия</td></tr>
+</table>
+</div>
+
+<p>Без всякого мода то же самое включается строкой в <code>config/bindings.conf</code>:</p>
+<pre><code>screen.effects = crt=0.6,chroma=0.2</code></pre>
+
+<div class="warn">
+<p>
+Если <code>nrz.fx.info().drawing</code> остаётся <code>false</code> — кадр
+уходит мимо OpenGL, и эффекты до экрана не доходят. Такое бывает на устройствах,
+где игра рисует через Vulkan.
+</p>
+</div>
+
+<h2 id="shader">Свой шейдер <span class="tag">1.1.0</span></h2>
+<p>
+Список встроенных эффектов кончается — свой не кончается. Мод пишет фрагментный
+шейдер, загрузчик добавляет обвязку и собирает его.
+</p>
+
+<pre><code>nrz.fx.uniform("heat", 0.4);
+nrz.fx.shader([
+  "uniform float heat;",
+  "vec3 effect(vec2 uv) {",
+  "    vec3 c = texture2D(uTex, uv).rgb;",
+  "    float v = dot(c, vec3(0.299, 0.587, 0.114));",
+  "    return vec3(v * heat * 2.0, v, 1.0 - v);",
+  "}",
+].join("\n"));
+
+nrz.fx.noShader();   // обратно к встроенным</code></pre>
+
+<div class="scroll">
+<table>
+<tr><th>Уже объявлено</th><th>Что это</th></tr>
+<tr><td><code>vUv</code></td><td>координата пикселя, от 0 до 1</td></tr>
+<tr><td><code>uTex</code></td><td>готовый кадр игры</td></tr>
+<tr><td><code>uRes</code></td><td>размер экрана в пикселях</td></tr>
+<tr><td><code>uTime</code></td><td>секунды с запуска</td></tr>
+</table>
+</div>
+
+<p>
+Всё остальное мод объявляет сам и задаёт через <code>nrz.fx.uniform</code>.
+Достаточно написать <code>vec3 effect(vec2 uv)</code>; если нужен полный
+контроль, можно написать свой <code>void main</code> — тогда обвязку не добавят.
+</p>
+
+<div class="note">
+<p>
+Шейдер собирается на том потоке, где идёт отрисовка, то есть кадром позже.
+Поэтому ошибка в нём появляется не сразу, а в <code>nrz.fx.info().error</code>.
+</p>
+</div>
+
+<h2 id="windows">Окна поверх игры</h2>
+<p>
+Интерфейс игры не тронуть, не правя её собственные файлы, поэтому окна берутся
+у системы. Внутри — обычный html с css.
+</p>
+
+<pre><code>nrz.window.open("my.hud", {
+    x: 24, y: 120,
+    width: 320, height: 0,   // 0 — по содержимому
+    touchable: false,        // false — тапы проходят насквозь в игру
+    html: "&lt;b style='color:#fff'&gt;0, 64, 0&lt;/b&gt;",
+});
+
+nrz.window.setHtml("my.hud", "&lt;b&gt;новые координаты&lt;/b&gt;");
+nrz.window.move("my.hud", { x: 40, y: 200 });
+nrz.window.eval("my.hud", "document.body.style.opacity = 0.5");
+nrz.window.close("my.hud");
+nrz.window.list();
+nrz.window.info();           // {available, reason}</code></pre>
+
+<p>
+<code>touchable: false</code> — для показометров: координаты, FPS, что угодно;
+тапы уходят в игру. <code>true</code> — для пультов с кнопками.
+</p>
+
+<h3>Как окно разговаривает обратно</h3>
+<p>Страница внутри окна отправляет сообщения, мод их забирает:</p>
+<pre><code>// внутри html
+&lt;button onclick="nrzhost.send('привет')"&gt;кнопка&lt;/button&gt;
+
+// в моде
+var messages = nrz.window.poll("my.hud");   // массив строк</code></pre>
+
+<p>
+Но забирать их надо в цикле, а таймера у мода может и не быть. Поэтому
+сообщение, начинающееся с <code>nrz:</code>, обрабатывает сам загрузчик, и мод
+для этого не нужен вовсе:
+</p>
+
+<pre><code>&lt;button onclick="nrzhost.send('nrz:fx crt=0.7')"&gt;CRT&lt;/button&gt;
+&lt;button onclick="nrzhost.send('nrz:fx')"&gt;выключить&lt;/button&gt;
+&lt;button onclick="nrzhost.send('nrz:log что-то случилось')"&gt;в лог&lt;/button&gt;
+&lt;button onclick="nrzhost.send('nrz:close')"&gt;закрыть окно&lt;/button&gt;</code></pre>
+
+<p>Готовый пример — мод <code>panel.nrzmod</code> в репозитории.</p>
+
+<h2 id="native">Нативные моды</h2>
+<p>
+Мод можно написать и на C++ — это будет <code>.so</code>-библиотека. Она
+получает доступ к перехвату функций и к шине событий:
+</p>
+
+<pre><code>#include "mcbe/mod_api.h"
+#include "mcbe/events.h"
+
+static const McbeApi* api;
+
+static void on_hurt(McbeEvent* event, void* user) {
+    McbeDamageEvent* damage = (McbeDamageEvent*)event-&gt;data;
+    damage-&gt;amount *= 0.5f;      // половина урона
+}
+
+const McbeModInfo* mcbe_mod_info(void) {
+    static const McbeModInfo info = {
+        MCBE_ABI_VERSION, "my.mod", "Мой мод", "1.0.0", "1.21.131"
+    };
+    return &amp;info;
+}
+
+McbeResult mcbe_mod_init(const McbeApi* a) {
+    api = a;
+    api-&gt;subscribe(MCBE_EVENT_ACTOR_HURT, on_hurt, NULL);
+    return MCBE_OK;
+}</code></pre>
+
+<div class="warn">
+<p>
+События работают там, где загрузчик смог найти нужные функции игры по именам.
+На розничной сборке для Android имён нет — подробности <a href="#limits">ниже</a>.
+Скриптовые моды от этого не зависят.
+</p>
+</div>
+
+<h2 id="config">Настройки загрузчика</h2>
+<p><code>NRZLoader/config/bindings.conf</code>, создаётся сам при первом запуске:</p>
+
+<div class="scroll">
+<table>
+<tr><th>Настройка</th><th>Значения</th><th>Что делает</th></tr>
+<tr>
+  <td><code>script.run_in</code></td>
+  <td><code>all</code> · <code>game</code> · <code>first</code> · <code>none</code></td>
+  <td>в каких контекстах запускать скриптовые моды</td>
+</tr>
+<tr>
+  <td><code>storage.request</code></td>
+  <td><code>auto</code> · <code>always</code> · <code>never</code></td>
+  <td>спрашивать ли доступ к файлам при запуске игры</td>
+</tr>
+<tr>
+  <td><code>screen.effects</code></td>
+  <td><code>crt=0.6,chroma=0.2</code></td>
+  <td>эффекты, включённые сразу, без мода</td>
+</tr>
+</table>
+</div>
+
+<h2 id="versions">Версии</h2>
+<p>Версия загрузчика видна в трёх местах:</p>
+<ul>
+<li>на главном экране лаунчера — какая версия у вас установлена;</li>
+<li>на карточке игры — каким загрузчиком собрана стоящая игра;</li>
+<li>в первой строке <code>loader.log</code>.</li>
+</ul>
+<p>
+Если игра собрана более старым загрузчиком, лаунчер это заметит и предложит
+пересобрать.
+</p>
+<p>
+Мод объявляет <code>minLoader</code> и <code>maxLoader</code>. Проверка стоит
+именно в загрузчике, а не в моде: мод, который ошибается насчёт загрузчика,
+не может сам заметить свою ошибку.
+</p>
+
+<h2 id="limits">Чего он не может</h2>
+<p>
+Честно, потому что от этого зависит, стоит ли вам вообще это ставить.
+</p>
+<p>
+Minecraft Bedrock написан на C++, и в розничной сборке для Android
+<b>вырезаны все имена собственного кода Mojang</b>. Это проверено на настоящей
+библиотеке: поиск по <code>Actor</code>, <code>BlockLegacy</code>,
+<code>ItemStack</code> даёт ноль совпадений при 212 мегабайтах кода. Java-мод
+цепляется за классы игры по именам — здесь их физически нет.
+</p>
+
+<div class="scroll">
+<table>
+<tr><th>Что</th><th>Как оно</th></tr>
+<tr><td>Экранные эффекты, свои шейдеры</td><td>работают: перехват идёт на системном уровне</td></tr>
+<tr><td>Окна поверх игры</td><td>работают: окна берутся у Android</td></tr>
+<tr><td>Файлы, настройки, лог у мода</td><td>работают</td></tr>
+<tr><td>Официальный скриптовый API Minecraft</td><td>работает, если он есть в вашей сборке</td></tr>
+<tr><td>Менять урон, блоки, поведение мобов</td><td>нет: имён этих функций в клиенте не осталось</td></tr>
+<tr><td>Камера, рендер мира на блок</td><td>нет, по той же причине</td></tr>
+</table>
+</div>
+
+<h3>Что с этим можно сделать</h3>
+<p>
+Mojang бесплатно публикует выделенный сервер Bedrock под Windows и Linux, и
+рядом с ним кладёт файл символов. Это тот же исходный код, только без рендера.
+Оттуда известны имена классов, устройство и порядок виртуальных методов — но
+не адреса: сервер собран под другую архитектуру.
+</p>
+<p>
+Мостом может служить RTTI: если сборка клиента его не вырезала, от строки с
+именем класса есть дорога к таблице виртуальных методов, а номер метода в ней
+скажет сервер. В лаунчере есть кнопка <b>«Заглянуть внутрь игры»</b> — она за
+минуту отвечает, открыт этот путь или нет, и кладёт отчёт в
+<code>reports/rtti.txt</code>.
+</p>
+
+<h2 id="build">Сборка из исходников</h2>
+<pre><code># загрузчик, нужен Android NDK r25+
+ANDROID_NDK=$HOME/Android/Sdk/ndk/27.2.12479018 ./build.sh
+
+# классы, которые дописываются в игру
+ANDROID_SDK=$HOME/Android/Sdk ./bootstrap/build.sh
+
+# лаунчер
+gradle :app:assembleRelease
+
+# тесты
+./tests/run_tests.sh        # движок перехвата, под ARM64 в эмуляторе
+./tests/run_app_tests.sh    # патчер, манифесты, подпись</code></pre>
+
+<h2 id="legal">Правовая сторона</h2>
+<p>
+Инструмент ничего не скачивает и не обходит защиту: он работает с <b>вашей</b>
+копией игры, которую вы предоставляете сами, и ассеты Minecraft внутрь него не
+попадают.
+</p>
+<p>
+При этом модификация клиента расходится с условиями магазина Microsoft, а на
+серверах и Realms изменённый клиент могут счесть читерством. Держите такие
+сборки для одиночной игры и своих серверов.
+</p>
+<p>
+Если нужен способ без всего этого — у Bedrock есть официальные аддоны со
+скриптингом на JavaScript. Умеют меньше, но не ломаются от каждого обновления.
+</p>
+
+<footer>
+  NRZLoader 1.1.0 ·
+  <a href="https://github.com/narezany/NRZLoader">исходники на GitHub</a>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var button = document.getElementById('toggle');
+  var root = document.documentElement;
+
+  button.addEventListener('click', function () {
+    var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var now = root.getAttribute('data-theme') || (dark ? 'dark' : 'light');
+    root.setAttribute('data-theme', now === 'dark' ? 'light' : 'dark');
+  });
+})();
+</script>
+
+</body>
+</html>

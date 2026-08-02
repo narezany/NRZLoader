@@ -75,4 +75,8 @@
     <string name="mod_settings">Settings</string>
     <string name="mod_settings_save">Save</string>
     <string name="mod_needs_loader">Needs loader %1$s, this one is %2$s</string>
+    <string name="probe_title">Look inside the game</string>
+    <string name="probe_body">Checks whether the game kept the names of its own classes. That answers whether mods can reach the gameplay code at all. Nothing is sent anywhere.</string>
+    <string name="probe_action">Check</string>
+    <string name="probe_running">Reading the game library, a minute or so…</string>
 </resources>

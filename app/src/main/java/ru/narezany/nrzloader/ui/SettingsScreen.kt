@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -22,17 +24,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.narezany.nrzloader.BuildConfig
 import ru.narezany.nrzloader.R
 import ru.narezany.nrzloader.core.AppLocale
+import ru.narezany.nrzloader.core.GameLocator
 import ru.narezany.nrzloader.core.ModsFolder
+import ru.narezany.nrzloader.core.RttiProbe
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(onLanguageChanged: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var selected by remember { mutableStateOf(AppLocale.current(context)) }
+    var probing by remember { mutableStateOf(false) }
+    var probeResult by remember { mutableStateOf<String?>(null) }
 
     Column(
         Modifier
@@ -67,6 +79,72 @@ fun SettingsScreen(onLanguageChanged: () -> Unit) {
                                 onLanguageChanged()
                             }
                         },
+                    )
+                }
+            }
+        }
+
+        // Разбор игры на предмет уцелевших имён классов. Это ответ на вопрос,
+        // можно ли добраться до геймплейных функций, и стоит он одной минуты.
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.probe_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.probe_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                if (probing) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(
+                        stringResource(R.string.probe_running),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    FilledTonalButton(onClick = {
+                        probing = true
+                        probeResult = null
+                        scope.launch {
+                            val text = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    val game = GameLocator.findAll(context).firstOrNull()
+                                        ?: return@runCatching null
+                                    val result = RttiProbe.run(game)
+                                    val report = RttiProbe.writeReport(result, game)
+                                    buildString {
+                                        appendLine(
+                                            when (result.verdict) {
+                                                RttiProbe.Result.Verdict.PRESENT ->
+                                                    "RTTI на месте."
+                                                RttiProbe.Result.Verdict.PARTIAL ->
+                                                    "RTTI похоже вырезан."
+                                                RttiProbe.Result.Verdict.ABSENT ->
+                                                    "RTTI вырезан."
+                                            }
+                                        )
+                                        appendLine("имён классов: ${result.classNames}")
+                                        appendLine(
+                                            "из ожидаемых: ${result.found.size} " +
+                                                "(${result.found.take(8).joinToString(", ")})"
+                                        )
+                                        report?.let { appendLine(it.absolutePath) }
+                                    }
+                                }.getOrElse { "не вышло: ${it.message}" }
+                            }
+                            probeResult = text ?: "игра не найдена"
+                            probing = false
+                        }
+                    }) { Text(stringResource(R.string.probe_action)) }
+                }
+
+                probeResult?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace),
                     )
                 }
             }

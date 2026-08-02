@@ -77,4 +77,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // Разбор библиотеки игры от Android не зависит и проверяется на обычной
+    // JVM: на телефоне эталона нет, а от правильности разбора зависит вывод.
+    testImplementation("junit:junit:4.13.2")
 }
