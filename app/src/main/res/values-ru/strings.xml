@@ -78,4 +78,9 @@
     <string name="probe_running">Читаю библиотеку игры, это примерно минута…</string>
     <string name="loader_hot_title">Загрузчик обновляется без пересборки</string>
     <string name="loader_hot_body">Копия загрузчика лежит рядом с модами, и игра предпочитает её. Достаточно обновить лаунчер и перезапустить игру. Пересборка нужна, только когда меняется сам пакет.</string>
+    <string name="diag_title">Заработает ли разведка</string>
+    <string name="diag_again">Проверить ещё раз</string>
+    <string name="diag_probe_class">Какой класс разведывать</string>
+    <string name="diag_probe_hint">Загрузчик считает вызовы каждого метода этого класса и пишет reports/slots.txt. LocalPlayer — это вы, он есть всегда.</string>
+    <string name="diag_probe_off">выключено</string>
 </resources>

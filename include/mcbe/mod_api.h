@@ -21,7 +21,7 @@ extern "C" {
 // through "minLoader" and "maxLoader" in its mod.json. Kept in step with the
 // VERSION file at the root of the project and with the launcher's copy; a
 // test fails when they drift apart.
-#define MCBE_LOADER_VERSION "1.7.1"
+#define MCBE_LOADER_VERSION "1.8.0"
 
 typedef enum McbeLogLevel {
     MCBE_LOG_DEBUG = 0,

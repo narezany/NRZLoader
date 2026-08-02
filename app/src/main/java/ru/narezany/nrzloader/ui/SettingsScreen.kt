@@ -7,16 +7,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +36,8 @@ import ru.narezany.nrzloader.R
 import ru.narezany.nrzloader.core.AppLocale
 import ru.narezany.nrzloader.core.GameLocator
 import ru.narezany.nrzloader.core.ModsFolder
+import ru.narezany.nrzloader.core.Diagnostics
+import ru.narezany.nrzloader.core.ProbeSettings
 import ru.narezany.nrzloader.core.RttiProbe
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +51,16 @@ fun SettingsScreen(onLanguageChanged: () -> Unit) {
     var selected by remember { mutableStateOf(AppLocale.current(context)) }
     var probing by remember { mutableStateOf(false) }
     var probeResult by remember { mutableStateOf<String?>(null) }
+    var checks by remember { mutableStateOf<List<Diagnostics.Check>>(emptyList()) }
+    var probeClass by remember { mutableStateOf("") }
+    val ticks by rememberResumeTicker()
+
+    // Всё, что здесь проверяется, живёт вне приложения, поэтому перечитывается
+    // при каждом возврате, а не один раз.
+    LaunchedEffect(ticks, probeResult) {
+        checks = Diagnostics.run(context)
+        probeClass = ProbeSettings.current()
+    }
 
     Column(
         Modifier
@@ -153,6 +169,78 @@ fun SettingsScreen(onLanguageChanged: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace),
                     )
+                }
+            }
+        }
+
+        // Проверка всей цепочки: где она рвётся, снаружи не видно — файл
+        // просто не обновляется, а причин может быть шесть.
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    stringResource(R.string.diag_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+
+                checks.forEach { check ->
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            (if (check.ok) "✓  " else "✗  ") + check.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (check.ok) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.error,
+                        )
+                        Text(
+                            "     " + check.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (!check.ok && check.fix.isNotBlank()) {
+                            Text(
+                                "     → " + check.fix,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+
+                OutlinedButton(onClick = { checks = Diagnostics.run(context) }) {
+                    Text(stringResource(R.string.diag_again))
+                }
+
+                HorizontalDivider()
+
+                Text(
+                    stringResource(R.string.diag_probe_class),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    stringResource(R.string.diag_probe_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val options = listOf("") + ProbeSettings.candidates()
+                    options.forEach { name ->
+                        FilterChip(
+                            selected = name == probeClass,
+                            onClick = {
+                                ProbeSettings.set(name)
+                                probeClass = name
+                                checks = Diagnostics.run(context)
+                            },
+                            label = {
+                                Text(
+                                    if (name.isBlank()) stringResource(R.string.diag_probe_off)
+                                    else name
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }

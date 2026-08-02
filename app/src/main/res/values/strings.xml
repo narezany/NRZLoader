@@ -81,4 +81,9 @@
     <string name="probe_running">Reading the game library, a minute or so…</string>
     <string name="loader_hot_title">Loader updates without a rebuild</string>
     <string name="loader_hot_body">A copy of the loader sits next to the mods, and the game prefers it. Updating the launcher is enough — just restart the game. Rebuilding is only needed when the package itself changes.</string>
+    <string name="diag_title">Is the probe going to work</string>
+    <string name="diag_again">Check again</string>
+    <string name="diag_probe_class">Class to probe</string>
+    <string name="diag_probe_hint">The loader counts calls to every method of this class and writes reports/slots.txt. LocalPlayer is you — it always exists.</string>
+    <string name="diag_probe_off">off</string>
 </resources>
