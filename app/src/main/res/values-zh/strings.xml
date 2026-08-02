@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tab_loader">加载器</string>
+    <string name="tab_mods">模组</string>
+    <string name="tab_log">日志</string>
+
+    <string name="storage_title">没有文件访问权限</string>
+    <string name="storage_body">没有它就无法读取游戏，也无法创建模组文件夹。</string>
+    <string name="storage_action">授予权限</string>
+
+    <string name="game_not_found_title">未找到 Minecraft</string>
+    <string name="game_not_found_body">请从应用商店安装游戏。修补程序使用本机上已有的副本，不会下载任何内容。</string>
+
+    <string name="game_patched_badge">已装加载器</string>
+    <string name="game_parts">%d 个分包</string>
+
+    <string name="build_action">构建模组版本</string>
+    <string name="progress_hint">%d%% · 可以退出应用，构建会继续</string>
+
+    <string name="done_title">安装包已生成</string>
+    <string name="done_body">需要先卸载原版：新包的签名不同。存档和设置会保留。</string>
+    <string name="uninstall_action">卸载原版</string>
+    <string name="install_action">安装</string>
+    <string name="uninstall_first_hint">请先卸载原版，否则安装器会提示安装包已损坏。</string>
+
+    <string name="failed_title">未能完成</string>
+    <string name="failed_details">详情：%s</string>
+    <string name="ok_action">知道了</string>
+
+    <string name="loader_ready_title">加载器已安装</string>
+    <string name="loader_ready_body">请把模组放到 %s</string>
+    <string name="launch_action">启动游戏</string>
+
+    <string name="game_storage_title">游戏也需要文件访问权限</string>
+    <string name="game_storage_body">它自己要很久之后才会请求。现在授予，模组从第一次启动就能生效。</string>
+    <string name="game_storage_action">为游戏授予权限</string>
+
+    <string name="mods_folder_title">模组文件夹</string>
+    <string name="mods_folder_hint">原生模组是 .so 文件，脚本模组是 .js，打包好的是 .nrzmod。加载器在游戏启动时读取它们。</string>
+    <string name="mods_empty">还没有内容。打开一个 .nrzmod 文件，或把模组放进来并重启游戏。</string>
+
+    <string name="mod_kind_native">原生</string>
+    <string name="mod_kind_script">脚本</string>
+    <string name="mod_kind_package">整包</string>
+    <string name="mod_remove">删除</string>
+
+    <string name="log_refresh">刷新</string>
+    <string name="log_empty_title">日志为空</string>
+    <string name="log_empty_body">模组版游戏首次运行后会生成：%s</string>
+
+    <string name="mod_install_title">安装模组？</string>
+    <string name="mod_install_confirm">安装</string>
+    <string name="mod_install_cancel">取消</string>
+    <string name="mod_install_replace">同名模组已存在，将被替换。</string>
+    <string name="mod_installed">已安装。重启游戏即可生效。</string>
+    <string name="mod_install_failed">安装失败：%s</string>
+    <string name="mod_by">作者：%s</string>
+    <string name="tab_settings">设置</string>
+    <string name="settings_language">语言</string>
+    <string name="settings_language_system">跟随系统</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">NRZLoader %s</string>
+    <string name="settings_folder">加载器文件夹</string>
+    <string name="overlay_title">游戏上方的窗口</string>
+    <string name="overlay_body">模组可以在游戏上方绘制自己的面板——坐标显示、控制台。此权限需要单独授予。</string>
+    <string name="overlay_action">允许窗口</string>
+</resources>

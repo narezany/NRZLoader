@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Where the patched package waits to be handed to the installer. -->
+    <external-files-path name="patched" path="." />
+    <files-path name="internal" path="." />
+</paths>

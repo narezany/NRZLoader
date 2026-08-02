@@ -1,0 +1,7 @@
+{
+  "id": "example.hello",
+  "name": "Hello Mod",
+  "version": "1.0.0",
+  "author": "NRZLoader",
+  "description": "Проверочный мод: пишет в журнал и вызывает нативный код."
+}

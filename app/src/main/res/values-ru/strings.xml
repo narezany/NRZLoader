@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tab_loader">Загрузчик</string>
+    <string name="tab_mods">Моды</string>
+    <string name="tab_log">Журнал</string>
+
+    <string name="storage_title">Нет доступа к файлам</string>
+    <string name="storage_body">Без него не получится ни прочитать игру, ни создать папку с модами.</string>
+    <string name="storage_action">Выдать доступ</string>
+
+    <string name="game_not_found_title">Minecraft не найден</string>
+    <string name="game_not_found_body">Установите игру из Play Маркета. Патчер работает с той копией, которая уже стоит на устройстве, и ничего не скачивает.</string>
+
+    <string name="game_patched_badge">с загрузчиком</string>
+    <string name="game_parts">%d частей</string>
+
+    <string name="build_action">Собрать моднутую версию</string>
+    <string name="progress_hint">%d%% · можно свернуть, сборка продолжится</string>
+
+    <string name="done_title">Пакет собран</string>
+    <string name="done_body">Сначала нужно удалить исходную игру: у собранной другая подпись. Миры и настройки при этом остаются.</string>
+    <string name="uninstall_action">Удалить исходную игру</string>
+    <string name="install_action">Установить</string>
+    <string name="uninstall_first_hint">Сначала удалите исходную игру, иначе установщик скажет, что пакет повреждён.</string>
+
+    <string name="failed_title">Не вышло</string>
+    <string name="failed_details">Подробности: %s</string>
+    <string name="ok_action">Понятно</string>
+
+    <string name="loader_ready_title">Загрузчик уже стоит</string>
+    <string name="loader_ready_body">Моды кладите в %s</string>
+    <string name="launch_action">Запустить игру</string>
+
+    <string name="game_storage_title">Игре тоже нужен доступ к файлам</string>
+    <string name="game_storage_body">Сама она попросит его сильно позже. Если выдать сейчас, моды подхватятся с первого запуска.</string>
+    <string name="game_storage_action">Выдать доступ игре</string>
+
+    <string name="mods_folder_title">Папка модов</string>
+    <string name="mods_folder_hint">Нативные моды — файлы .so, скриптовые — .js, собранные — .nrzmod. Загрузчик подхватывает их при запуске игры.</string>
+    <string name="mods_empty">Пока пусто. Откройте файл .nrzmod или положите мод сюда и перезапустите игру.</string>
+
+    <string name="mod_kind_native">нативный</string>
+    <string name="mod_kind_script">скрипт</string>
+    <string name="mod_kind_package">пакет</string>
+    <string name="mod_remove">Удалить</string>
+
+    <string name="log_refresh">Обновить</string>
+    <string name="log_empty_title">Журнал пуст</string>
+    <string name="log_empty_body">Он появится после первого запуска моднутой игры: %s</string>
+
+    <string name="mod_install_title">Установить мод?</string>
+    <string name="mod_install_confirm">Установить</string>
+    <string name="mod_install_cancel">Отмена</string>
+    <string name="mod_install_replace">Мод с таким именем уже стоит, он будет заменён.</string>
+    <string name="mod_installed">Установлен. Перезапустите игру, чтобы он подхватился.</string>
+    <string name="mod_install_failed">Не удалось установить: %s</string>
+    <string name="mod_by">автор: %s</string>
+    <string name="tab_settings">Настройки</string>
+    <string name="settings_language">Язык</string>
+    <string name="settings_language_system">Как в системе</string>
+    <string name="settings_about">О программе</string>
+    <string name="settings_version">NRZLoader %s</string>
+    <string name="settings_folder">Папка загрузчика</string>
+    <string name="overlay_title">Окна поверх игры</string>
+    <string name="overlay_body">Моды могут рисовать свои панели поверх игры — координаты, пульт управления. Это разрешение Android спрашивает отдельно.</string>
+    <string name="overlay_action">Разрешить окна</string>
+</resources>

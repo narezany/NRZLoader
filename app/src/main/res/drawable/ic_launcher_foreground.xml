@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- A stylised block with a notch, drawn rather than shipped as a bitmap
+         so the icon costs nothing and scales cleanly. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,36 L54,26 L74,36 L74,60 L54,70 L34,60 Z" />
+    <path
+        android:fillColor="#B9EEA6"
+        android:pathData="M54,44 L74,36 L74,60 L54,70 Z" />
+    <path
+        android:fillColor="#7FBF6A"
+        android:pathData="M34,36 L54,44 L54,70 L34,60 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,74 h20 v6 h-20 Z" />
+</vector>

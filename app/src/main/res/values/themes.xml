@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colours come from the Material theme built in Compose; this only has to
+         keep the system bars out of the way before the first frame. -->
+    <style name="Theme.NRZLoader" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/background_dark</item>
+    </style>
+</resources>

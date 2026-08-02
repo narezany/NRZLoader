@@ -1,0 +1,7 @@
+{
+  "id": "nrz.scout",
+  "name": "Scout",
+  "version": "1.0.0",
+  "author": "NRZLoader",
+  "description": "Записывает, что доступно в каждом контексте JavaScript внутри игры. Отчёт в NRZLoader/reports/scout.json"
+}
