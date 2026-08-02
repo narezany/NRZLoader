@@ -17,6 +17,7 @@
 #include "loader.h"
 #include "log.h"
 #include "module.h"
+#include "overlay.h"
 
 extern "C" {
 /**
@@ -173,6 +174,12 @@ bool make_writable(void* address, size_t length) {
  * что в такую-то секунду сработали такие-то методы, — а что человек в ту
  * секунду делал, он помнит и так.
  */
+void append_timeline(double seconds);
+
+}  // namespace
+
+namespace {
+
 void append_timeline(double seconds) {
     if (g_timeline_path.empty()) return;
 
@@ -213,7 +220,51 @@ void worker() {
     }
 }
 
+/** Кнопки, которыми человек размечает ленту, не отрываясь от игры. */
+constexpr const char* kActions[] = {
+    "ломаю блок", "поставил блок", "бью моба", "получил урон",
+    "открыл сундук", "крафчу", "прыгаю", "плыву",
+    "ем", "сменил предмет", "открыл инвентарь", "просто стою",
+};
+
+std::string panel_html() {
+    std::ostringstream page;
+    page << "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
+         << "<style>"
+         << "*{box-sizing:border-box}"
+         << "body{margin:0;font:12px/1.2 sans-serif;color:#fff}"
+         << ".c{background:rgba(18,18,22,.88);border-radius:12px;padding:8px}"
+         << ".t{font-size:10px;opacity:.55;margin:0 2px 6px;text-transform:uppercase}"
+         << ".g{display:grid;grid-template-columns:1fr 1fr;gap:4px}"
+         << "button{appearance:none;border:0;border-radius:8px;padding:8px 4px;"
+         << "background:rgba(255,255,255,.1);color:#fff;font:inherit}"
+         << "button:active{background:rgba(120,220,150,.45)}"
+         << "</style><div class=c><p class=t>жми ПЕРЕД действием</p><div class=g>";
+
+    for (const char* action : kActions) {
+        page << "<button onclick=\"m('" << action << "')\">" << action << "</button>";
+    }
+
+    page << "</div></div><script>function m(t){nrzhost.send('nrz:mark '+t)}</script>";
+    return page.str();
+}
+
 }  // namespace
+
+void mark(const std::string& label) {
+    if (g_timeline_path.empty()) return;
+
+    // Сначала дописывается то, что накопилось до отметки: иначе действие и
+    // предшествующее ему безделье слиплись бы в одно окно.
+    const double seconds =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - g_started).count();
+    append_timeline(seconds);
+
+    std::ofstream file(g_timeline_path, std::ios::app);
+    if (file) file << "--- " << static_cast<long>(seconds) << " с: " << label << " ---\n";
+
+    MCBE_LOGI("отметка: %s", label.c_str());
+}
 
 void write_report() {
     if (g_vtable == nullptr || g_report_path.empty()) return;
@@ -367,6 +418,18 @@ bool install(Loader& loader, const std::string& config_path) {
     // Отчёт пишется сразу, ещё пустой: так видно, что счётчики встали, и не
     // приходится гадать, ждать ли дальше.
     write_report();
+
+    // Панель с кнопками: нажатие ставит в ленту отметку, и потом не нужно
+    // вспоминать, что происходило на такой-то секунде.
+    if (setting(config_path, "probe.markers") != "off") {
+        const std::string trouble = overlay::trouble();
+        if (trouble.empty()) {
+            overlay::open("nrz.probe", panel_html(), 16, 90, 300, 0, true);
+            MCBE_LOGI("панель отметок открыта");
+        } else {
+            MCBE_LOGW("панель отметок не открыть: %s", trouble.c_str());
+        }
+    }
 
     g_running.store(true);
     std::thread(worker).detach();

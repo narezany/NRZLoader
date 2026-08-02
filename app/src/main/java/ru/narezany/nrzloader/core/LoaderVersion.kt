@@ -9,11 +9,11 @@ package ru.narezany.nrzloader.core
  * rather than trusting anyone to remember.
  */
 object LoaderVersion {
-    const val VALUE = "1.9.1"
+    const val VALUE = "1.10.0"
 
     /**
      * Compares dotted versions, returning a negative number, zero, or a
-     * positive one. Missing parts count as zero, so "1.2" equals "1.9.1", and
+     * positive one. Missing parts count as zero, so "1.2" equals "1.10.0", and
      * anything that is not a number counts as zero rather than throwing:
      * a mod's manifest is written by hand and will eventually contain junk.
      */

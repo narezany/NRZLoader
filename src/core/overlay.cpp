@@ -3,6 +3,7 @@
 #include "jni_bridge.h"
 #include "log.h"
 #include "screen_fx.h"
+#include "vtable_probe.h"
 
 #if defined(__ANDROID__)
 #include <jni.h>
@@ -290,6 +291,7 @@ std::string list() { return std::string(); }
  * can usefully do by itself, so that a window of buttons keeps working even in
  * an engine that gives a mod no way to run code on a timer.
  *
+ *   mark <text>  put a labelled marker in the probe's timeline
  *   fx <spec>    turn screen effects on, as "crt=0.6,glitch=0.2"
  *   close        close the window the command came from
  *   log <text>   write a line to the loader's log
@@ -310,7 +312,9 @@ extern "C" JNIEXPORT void JNICALL Java_ru_narezany_nrzloader_Overlay_nativeComma
     const std::string verb = text.substr(0, space);
     const std::string rest = space == std::string::npos ? std::string() : text.substr(space + 1);
 
-    if (verb == "fx") {
+    if (verb == "mark") {
+        mcbe::probe::mark(rest);
+    } else if (verb == "fx") {
         mcbe::fx::set(rest);
     } else if (verb == "close") {
         mcbe::overlay::close(window);
