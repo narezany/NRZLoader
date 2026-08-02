@@ -109,12 +109,12 @@ uint64_t sum(const std::vector<size_t>& slots) {
 }
 
 /**
- * Страница окошка.
+ * Страница окошка по умолчанию.
  *
- * Числа в ней потом меняются по одному, а не переписывается всё целиком:
- * перерисовывать документ пять раз в секунду поверх игры — заметная работа.
+ * Кладётся в config/hud.html при первом запуске и дальше не трогается: если
+ * человек её поправил, переписывать поверх — худшее, что можно сделать.
  */
-std::string page_html() {
+std::string default_html() {
     std::ostringstream page;
 
     // Отладочный экран Minecraft — это просто белые строки с чёрной тенью
@@ -129,6 +129,15 @@ std::string page_html() {
             ".f{opacity:.42}"
             "</style><div id=b></div>"
             "<script>"
+            "/* Этот файл можно править. Меняйте что угодно — загрузчик его\n"
+            "   только читает. Единственное требование: объявить u(d).\n"
+            "\n"
+            "   d.v  версия загрузчика\n"
+            "   d.f  кадров в секунду\n"
+            "   d.t  тактов в секунду (у игры их 20)\n"
+            "   d.u  сколько идёт игра\n"
+            "   d.s  список показателей: [идёт ли прямо сейчас, сколько всего]\n"
+            "        в том же порядке, что имена в N ниже */\n"
             "var N=[";
 
     for (size_t index = 0; index < kSignalCount; ++index) {
@@ -148,6 +157,36 @@ std::string page_html() {
               "document.getElementById('b').innerHTML=h}"
             "</script>";
     return page.str();
+}
+
+/**
+ * Вид окошка — обычный файл рядом с настройками.
+ *
+ * Пока он был зашит внутрь, любое «шрифт не тот, цвет не тот» упиралось в
+ * пересборку загрузчика и круг переписки. Теперь это html: открыл, поправил,
+ * перезапустил игру. Единственное, что от файла требуется, — объявить функцию
+ * u(d), которой загрузчик несколько раз в секунду отдаёт числа.
+ */
+std::string page_html(const std::string& config_directory) {
+    const std::string path = config_directory + "/hud.html";
+
+    std::ifstream existing(path);
+    if (existing.good()) {
+        std::ostringstream body;
+        body << existing.rdbuf();
+        if (body.str().size() > 32) {
+            MCBE_LOGI("вид окошка взят из %s", path.c_str());
+            return body.str();
+        }
+    }
+
+    const std::string html = default_html();
+    std::ofstream fresh(path);
+    if (fresh) {
+        fresh << html;
+        MCBE_LOGI("вид окошка можно править в %s", path.c_str());
+    }
+    return html;
 }
 
 }  // namespace
@@ -176,7 +215,8 @@ bool install(Loader& loader, const std::string& config_path) {
 
     // Ширина не задаётся: строки короткие, а окно по содержимому не режет
     // хвосты — прежнее, заданное числом, обрезало их на любом экране.
-    const std::string failure = overlay::open("nrz.hud", page_html(), 6, 44, 0, 0, false);
+    const std::string failure = overlay::open(
+        "nrz.hud", page_html(loader.data_directory() + "/config"), 6, 44, 0, 0, false);
     if (!failure.empty()) {
         MCBE_LOGW("окошко не открылось: %s", failure.c_str());
         return false;
@@ -188,7 +228,6 @@ bool install(Loader& loader, const std::string& config_path) {
 
     // Тапы сквозь него проходят в игру: это показометр, а не пульт.
     MCBE_LOGI("окошко открыто, %zu показателей", kSignalCount);
-    (void)loader;
     return true;
 }
 
