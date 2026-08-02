@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.narezany.nrzloader.R
 import ru.narezany.nrzloader.core.GameLocator
+import ru.narezany.nrzloader.core.LoaderVersion
 import ru.narezany.nrzloader.core.ModsFolder
 import ru.narezany.nrzloader.core.PatchRunner
 import ru.narezany.nrzloader.core.PatchService
@@ -79,6 +80,12 @@ fun HomeScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Text(
+            stringResource(R.string.loader_version, LoaderVersion.VALUE),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         if (!storageGranted) {
             StatusCard(
                 title = stringResource(R.string.storage_title),
@@ -170,6 +177,16 @@ fun HomeScreen(
                 }
             }
 
+            if (installed.loaderVersion.isNotBlank()
+                && LoaderVersion.compare(installed.loaderVersion, LoaderVersion.VALUE) < 0) {
+                StatusCard(
+                    title = stringResource(R.string.game_outdated_title),
+                    body = stringResource(
+                        R.string.game_outdated_body, installed.loaderVersion, LoaderVersion.VALUE),
+                    warning = true,
+                )
+            }
+
             StatusCard(
                 title = stringResource(R.string.overlay_title),
                 body = stringResource(R.string.overlay_body),
@@ -245,7 +262,11 @@ private fun GameCard(install: GameLocator.Installed) {
                 )
                 if (install.patched) {
                     Text(
-                        stringResource(R.string.game_patched_badge),
+                        if (install.loaderVersion.isBlank()) {
+                            stringResource(R.string.game_patched_badge)
+                        } else {
+                            stringResource(R.string.game_patched_with, install.loaderVersion)
+                        },
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }

@@ -64,4 +64,12 @@
     <string name="overlay_title">游戏上方的窗口</string>
     <string name="overlay_body">模组可以在游戏上方绘制自己的面板——坐标显示、控制台。此权限需要单独授予。</string>
     <string name="overlay_action">允许窗口</string>
+    <string name="loader_version">NRZLoader %s</string>
+    <string name="game_patched_with">加载器 %s</string>
+    <string name="game_outdated_title">游戏由旧版加载器构建</string>
+    <string name="game_outdated_body">游戏内是加载器 %1$s，启动器已是 %2$s。请重新构建模组版以更新。</string>
+
+    <string name="mod_settings">设置</string>
+    <string name="mod_settings_save">保存</string>
+    <string name="mod_needs_loader">需要加载器 %1$s，当前为 %2$s</string>
 </resources>

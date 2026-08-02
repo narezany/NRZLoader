@@ -37,6 +37,14 @@ public final class ApkPatcher {
     private static final String GAME_LIBRARY = "libminecraftpe.so";
     private static final String BOOTSTRAP_CLASS = "ru.narezany.nrzloader.Bootstrap";
 
+    /**
+     * Where the loader's version is recorded inside the rebuilt package.
+     *
+     * The launcher reads it back to say which loader a given install carries,
+     * which matters once mods start requiring one.
+     */
+    private static final String VERSION_ENTRY = "assets/nrzloader.version";
+
     public interface Progress {
         void onStep(String message, int percent);
     }
@@ -64,6 +72,8 @@ public final class ApkPatcher {
          * system screen for it reachable.
          */
         public boolean allowOverlayWindows = true;
+        /** Recorded inside the package so the launcher can read it back. */
+        public String loaderVersion = "";
         public PrivateKey signingKey;
         public X509Certificate signingCertificate;
     }
@@ -140,6 +150,12 @@ public final class ApkPatcher {
                 writeEntry(out, counter, LIBRARY_DIRECTORY + LOADER_NAME, options.loaderLibrary);
                 writeEntry(out, counter, dexName, options.bootstrapDex);
                 written += 2;
+
+                if (options.loaderVersion != null && !options.loaderVersion.isEmpty()) {
+                    writeEntry(out, counter, VERSION_ENTRY,
+                            options.loaderVersion.getBytes("UTF-8"));
+                    written++;
+                }
             }
         }
 

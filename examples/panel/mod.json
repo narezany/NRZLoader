@@ -1,7 +1,27 @@
 {
   "id": "nrz.panel",
   "name": "Пульт",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "NRZLoader",
-  "description": "Окно поверх игры с кнопками экранных эффектов: CRT, рыбий глаз, помехи, пиксели. Требует разрешения «окна поверх других приложений»."
+  "description": "Окно поверх игры с кнопками экранных эффектов: CRT, рыбий глаз, помехи, пиксели, плюс свой шейдер. Требует разрешения «окна поверх других приложений».",
+
+  "minLoader": "1.1.0",
+
+  "links": [
+    { "label": "GitHub", "url": "https://github.com/narezany/NRZLoader" },
+    { "label": "Как писать моды", "url": "https://github.com/narezany/NRZLoader#мод-на-javascript" }
+  ],
+
+  "settings": [
+    { "key": "showPanel", "label": "Показывать пульт", "type": "toggle", "default": true },
+    { "key": "x", "label": "Отступ слева", "type": "slider", "min": 0, "max": 400, "default": 24 },
+    { "key": "y", "label": "Отступ сверху", "type": "slider", "min": 0, "max": 800, "default": 120 },
+    {
+      "key": "startWith",
+      "label": "Включать при запуске",
+      "type": "choice",
+      "options": ["ничего", "crt", "рыбий глаз", "плёнка"],
+      "default": "ничего"
+    }
+  ]
 }

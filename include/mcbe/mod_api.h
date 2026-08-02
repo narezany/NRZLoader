@@ -17,6 +17,12 @@ extern "C" {
 // against a different value.
 #define MCBE_ABI_VERSION 3u
 
+// The loader's own version, which a packaged mod can require a range of
+// through "minLoader" and "maxLoader" in its mod.json. Kept in step with the
+// VERSION file at the root of the project and with the launcher's copy; a
+// test fails when they drift apart.
+#define MCBE_LOADER_VERSION "1.1.0"
+
 typedef enum McbeLogLevel {
     MCBE_LOG_DEBUG = 0,
     MCBE_LOG_INFO = 1,

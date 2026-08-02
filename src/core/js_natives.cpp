@@ -246,10 +246,30 @@ Geometry parse_geometry(const std::string& packed) {
     return result;
 }
 
+/** Turns anything a shader log may contain into something json survives. */
+std::string escape_json(const std::string& text) {
+    std::string result;
+    for (char character : text) {
+        switch (character) {
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': break;
+            case '\t': result += " "; break;
+            default:
+                if (static_cast<unsigned char>(character) < 0x20) break;
+                result += character;
+        }
+    }
+    return result;
+}
+
 std::string describe_screen() {
     std::ostringstream out;
     out << "{\"names\":\"" << fx::names() << "\""
         << ",\"active\":\"" << fx::describe() << "\""
+        << ",\"shader\":" << (fx::shader_active() ? "true" : "false")
+        << ",\"error\":\"" << escape_json(fx::shader_error()) << "\""
         << ",\"drawing\":" << (fx::running() ? "true" : "false") << "}";
     return out.str();
 }
@@ -298,6 +318,20 @@ std::string dispatch(const std::string& function, const std::string& first,
         return fx::describe();
     }
     if (function == "fxInfo") return describe_screen();
+    if (function == "fxShader") {
+        if (first.empty()) {
+            fx::clear_shader();
+            return "cleared";
+        }
+        fx::set_shader(first);
+        return "building";
+    }
+    if (function == "fxUniform") {
+        float value = 0.0f;
+        sscanf(second.c_str(), "%f", &value);
+        fx::set_uniform(first, value);
+        return "ok";
+    }
 
     // Windows floating above the game.
     if (function == "windowOpen") {
@@ -400,9 +434,19 @@ constexpr const char* kShim = R"JS(
       return call('fxSet', pairs.join(','));
     },
     clear: function () { return call('fxSet', ''); },
-    // Says which effects are on, which names exist, and whether they are
-    // reaching the screen at all.
+    // Says which effects are on, which names exist, whether a mod's own
+    // shader is running, and whether any of it reaches the screen.
     info: function () { try { return JSON.parse(call('fxInfo')); } catch (e) { return {}; } },
+
+    // A shader of the mod's own, which replaces the built-in effects.
+    //
+    // Write `vec3 effect(vec2 uv)` and return a colour; uTex, uRes, uTime and
+    // vUv are declared already. Declare any other uniform yourself and set it
+    // with uniform() below. Building happens on the drawing thread, so a
+    // mistake in the shader shows up in info().error a frame later.
+    shader: function (source) { return call('fxShader', source || ''); },
+    noShader: function () { return call('fxShader', ''); },
+    uniform: function (name, value) { return call('fxUniform', name, Number(value)); },
   };
 
   var pack = function (options) {

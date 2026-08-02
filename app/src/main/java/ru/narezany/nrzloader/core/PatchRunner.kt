@@ -49,6 +49,7 @@ object PatchRunner {
                 loaderLibrary = context.assets.open(LOADER_ASSET).use { it.readBytes() }
                 bootstrapDex = context.assets.open(BOOTSTRAP_ASSET).use { it.readBytes() }
                 applicationLabel = appLabel
+                loaderVersion = LoaderVersion.VALUE
                 requestAllFiles = true
             }
             context.assets.open(KEYSTORE_ASSET).use {

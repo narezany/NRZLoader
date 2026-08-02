@@ -18,6 +18,29 @@ object ModsFolder {
 
     fun ensure(): Boolean = mods.mkdirs() || mods.isDirectory
 
+    /** A button on a mod's card that opens something in a browser. */
+    data class Link(val label: String, val url: String)
+
+    /**
+     * One thing a mod lets the user change.
+     *
+     * The launcher draws the control and writes the value; the mod reads it
+     * back with nrz.readJson("config/<id>.json"). Nothing in it is interpreted
+     * by the loader, which is what lets a mod add settings without the
+     * launcher having to learn about them first.
+     */
+    data class Setting(
+        val key: String,
+        val label: String,
+        val kind: Kind,
+        val default: String,
+        val options: List<String> = emptyList(),
+        val min: Float = 0f,
+        val max: Float = 1f,
+    ) {
+        enum class Kind { TOGGLE, SLIDER, CHOICE, TEXT }
+    }
+
     data class Mod(
         val file: File,
         val kind: Kind,
@@ -27,12 +50,28 @@ object ModsFolder {
         val description: String = "",
         val author: String = "",
         val icon: File? = null,
+        val minLoader: String = "",
+        val maxLoader: String = "",
+        val links: List<Link> = emptyList(),
+        val settings: List<Setting> = emptyList(),
     ) {
         enum class Kind { NATIVE, SCRIPT, PACKAGE }
 
         val sizeBytes: Long
             get() = if (file.isDirectory) file.walkTopDown().filter { it.isFile }.sumOf { it.length() }
             else file.length()
+
+        /** Whether the loader on this device is one the mod was written for. */
+        val compatible: Boolean get() = LoaderVersion.satisfies(minLoader, maxLoader)
+
+        /** What the mod asks for, shown when it is not what is installed. */
+        val requirement: String
+            get() = when {
+                minLoader.isNotBlank() && maxLoader.isNotBlank() -> "$minLoader – $maxLoader"
+                minLoader.isNotBlank() -> "$minLoader+"
+                maxLoader.isNotBlank() -> "≤ $maxLoader"
+                else -> ""
+            }
     }
 
     fun list(): List<Mod> {
@@ -66,7 +105,60 @@ object ModsFolder {
             description = json.optString("description", ""),
             author = json.optString("author", ""),
             icon = icon,
+            minLoader = json.optString("minLoader", ""),
+            maxLoader = json.optString("maxLoader", ""),
+            links = readLinks(json),
+            settings = readSettings(json),
         )
+    }
+
+    /**
+     * Buttons the mod wants on its card: its page, its chat, its issue
+     * tracker. Only http links are kept — a card in a launcher is no place to
+     * fire arbitrary intents from a file someone downloaded.
+     */
+    private fun readLinks(json: JSONObject): List<Link> {
+        val array = json.optJSONArray("links") ?: return emptyList()
+
+        return (0 until array.length()).mapNotNull { index ->
+            val entry = array.optJSONObject(index) ?: return@mapNotNull null
+            val url = entry.optString("url").trim()
+            val label = entry.optString("label").ifBlank { url }
+
+            if (!url.startsWith("https://") && !url.startsWith("http://")) return@mapNotNull null
+            Link(label, url)
+        }
+    }
+
+    private fun readSettings(json: JSONObject): List<Setting> {
+        val array = json.optJSONArray("settings") ?: return emptyList()
+
+        return (0 until array.length()).mapNotNull { index ->
+            val entry = array.optJSONObject(index) ?: return@mapNotNull null
+            val key = entry.optString("key").trim()
+            if (key.isEmpty()) return@mapNotNull null
+
+            val kind = when (entry.optString("type").lowercase()) {
+                "toggle", "bool", "boolean" -> Setting.Kind.TOGGLE
+                "slider", "number", "float" -> Setting.Kind.SLIDER
+                "choice", "select", "enum" -> Setting.Kind.CHOICE
+                else -> Setting.Kind.TEXT
+            }
+
+            val options = entry.optJSONArray("options")?.let { list ->
+                (0 until list.length()).map { list.optString(it) }
+            }.orEmpty()
+
+            Setting(
+                key = key,
+                label = entry.optString("label").ifBlank { key },
+                kind = kind,
+                default = entry.opt("default")?.toString().orEmpty(),
+                options = options,
+                min = entry.optDouble("min", 0.0).toFloat(),
+                max = entry.optDouble("max", 1.0).toFloat(),
+            )
+        }
     }
 
     /** Last few lines of the loader's log, which is where problems show up. */

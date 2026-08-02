@@ -12,6 +12,7 @@
 
 #include "js_natives.h"
 #include "loader.h"
+#include "mod_manifest.h"
 #include "paths.h"
 #include "log.h"
 #include "mcbe/events.h"
@@ -130,8 +131,16 @@ void run_javascript_in_current_context() {
         return;
     }
 
+    const std::string config = Loader::instance().data_directory() + "/config";
+
     g_inside_our_script = true;
     for (const std::string& path : files) {
+        std::string reason;
+        if (!mods::should_run(path, directory, config, MCBE_LOADER_VERSION, reason)) {
+            MCBE_LOGI("skipping %s: %s", path.c_str(), reason.c_str());
+            continue;
+        }
+
         std::ifstream file(path);
         if (!file) continue;
         const std::string source((std::istreambuf_iterator<char>(file)),

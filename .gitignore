@@ -1,8 +1,8 @@
 *.o
 *.so
 .gradle/
+.kotlin/
 app/build/
 build/
 local.properties
 out/
-.kotlin/

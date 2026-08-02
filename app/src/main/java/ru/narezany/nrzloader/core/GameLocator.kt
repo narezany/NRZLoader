@@ -12,6 +12,9 @@ import java.io.File
  * worked around.
  */
 object GameLocator {
+    /** Where the patcher records which loader built a package. */
+    const val LOADER_VERSION_ENTRY = "assets/nrzloader.version"
+
     private val CANDIDATE_PACKAGES = listOf(
         "com.mojang.minecraftpe",
         "com.mojang.minecraftpe.preview",
@@ -23,6 +26,8 @@ object GameLocator {
         val versionName: String,
         val apkPaths: List<String>,
         val patched: Boolean,
+        /** Which loader built this package, when it was built by one. */
+        val loaderVersion: String = "",
     ) {
         /** The package carrying the 64-bit native library, which is the one to patch. */
         val primaryApk: String? get() = apkPaths.firstOrNull { hasArm64Library(it) } ?: apkPaths.firstOrNull()
@@ -51,10 +56,26 @@ object GameLocator {
                     // A patched install carries the loader; spotting it keeps the
                     // app from offering to patch something already patched.
                     patched = paths.any { hasLoader(it) },
+                    loaderVersion = paths.firstNotNullOfOrNull { readLoaderVersion(it) }.orEmpty(),
                 )
             }.getOrNull()
         }
     }
+
+    /**
+     * Which loader built this package.
+     *
+     * Written into the package at patch time, so a game built by an older
+     * loader can be told apart from one built by the current launcher without
+     * asking the user to remember.
+     */
+    private fun readLoaderVersion(apkPath: String): String? = runCatching {
+        java.util.zip.ZipFile(apkPath).use { zip ->
+            val entry = zip.getEntry(LOADER_VERSION_ENTRY) ?: return@use null
+            zip.getInputStream(entry).use { it.readBytes().decodeToString().trim() }
+                .takeIf { it.isNotEmpty() }
+        }
+    }.getOrNull()
 
     /** True when the package already contains the loader library. */
     private fun hasLoader(apkPath: String): Boolean = containsEntry(apkPath, "lib/arm64-v8a/libnrzloader.so")

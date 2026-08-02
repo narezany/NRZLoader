@@ -26,6 +26,7 @@ set(LOADER_SOURCES
     src/core/symbols.cpp
     src/core/module.cpp
     src/core/paths.cpp
+    src/core/mod_manifest.cpp
     src/core/elf_image.cpp
     src/core/log.cpp
     src/hook/inline_hook.cpp
@@ -71,9 +72,13 @@ if(MCBE_BUILD_TESTS)
     add_executable(test_paths tests/test_paths.cpp src/core/paths.cpp)
     target_include_directories(test_paths PRIVATE src include)
 
+    add_executable(test_mods tests/test_mods.cpp src/core/mod_manifest.cpp)
+    target_include_directories(test_mods PRIVATE src include)
+
     add_test(NAME arm64_hooks COMMAND test_arm64)
     add_test(NAME directory_layout COMMAND test_paths)
     add_test(NAME symbol_resolution COMMAND test_symbols)
+    add_test(NAME mod_manifests COMMAND test_mods)
 endif()
 
 # Release builds ship without symbols: the loader is 3 MB otherwise, most of

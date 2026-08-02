@@ -10,6 +10,7 @@
 
 #include "bindings.h"
 #include "jni_bridge.h"
+#include "mod_manifest.h"
 #include "screen_fx.h"
 #include "ui_bridge.h"
 #include "v8_bridge.h"
@@ -283,6 +284,13 @@ void Loader::load_mods() {
     const std::vector<std::string> files = paths::collect_mod_files(mods_directory_, ".so");
 
     for (const std::string& path : files) {
+        std::string reason;
+        if (!mods::should_run(path, mods_directory_, data_directory_ + "/config",
+                              MCBE_LOADER_VERSION, reason)) {
+            MCBE_LOGI("skipping %s: %s", path.c_str(), reason.c_str());
+            continue;
+        }
+
         void* handle = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
         if (handle == nullptr) {
             MCBE_LOGE("cannot load %s: %s", path.c_str(), dlerror());
@@ -344,7 +352,7 @@ void Loader::start() {
     if (started_) return;
     started_ = true;
 
-    MCBE_LOGI("NRZLoader starting");
+    MCBE_LOGI("NRZLoader %s starting", MCBE_LOADER_VERSION);
     detect_data_directory();
 
     if (!symbols_.initialise(game_library_)) {

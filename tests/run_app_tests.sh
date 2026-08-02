@@ -63,4 +63,23 @@ else
 fi
 
 echo
+echo "== the loader version says the same thing everywhere =="
+# A mod declares which loader versions it works with, so this number carries
+# meaning; three copies of it that can drift apart would make that meaningless.
+declared="$(tr -d ' \t\r\n' < "$root/VERSION")"
+in_header="$(sed -n 's/.*#define MCBE_LOADER_VERSION "\(.*\)".*/\1/p' \
+    "$root/include/mcbe/mod_api.h")"
+in_launcher="$(sed -n 's/.*const val VALUE = "\(.*\)".*/\1/p' \
+    "$root/app/src/main/java/ru/narezany/nrzloader/core/LoaderVersion.kt")"
+
+echo "  VERSION        $declared"
+echo "  mod_api.h      $in_header"
+echo "  LoaderVersion  $in_launcher"
+if [ "$declared" != "$in_header" ] || [ "$declared" != "$in_launcher" ]; then
+    echo "  FAIL  they disagree"
+    exit 1
+fi
+echo "  ok    all three agree"
+
+echo
 echo "all app suites passed"

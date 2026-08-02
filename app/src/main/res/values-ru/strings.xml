@@ -64,4 +64,12 @@
     <string name="overlay_title">Окна поверх игры</string>
     <string name="overlay_body">Моды могут рисовать свои панели поверх игры — координаты, пульт управления. Это разрешение Android спрашивает отдельно.</string>
     <string name="overlay_action">Разрешить окна</string>
+    <string name="loader_version">NRZLoader %s</string>
+    <string name="game_patched_with">загрузчик %s</string>
+    <string name="game_outdated_title">Игра собрана старым загрузчиком</string>
+    <string name="game_outdated_body">Внутри игры загрузчик %1$s, в лаунчере уже %2$s. Соберите моднутую версию заново, чтобы обновить.</string>
+
+    <string name="mod_settings">Настройки</string>
+    <string name="mod_settings_save">Сохранить</string>
+    <string name="mod_needs_loader">Нужен загрузчик %1$s, здесь %2$s</string>
 </resources>

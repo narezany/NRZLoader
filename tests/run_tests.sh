@@ -56,6 +56,15 @@ echo
 echo "== directory layout =="
 "$qemu" -L "$sysroot" "$work/test_paths" "$work/paths"
 
+"$cxx" -O1 -g -o "$work/test_mods" \
+    "$root/tests/test_mods.cpp" "$root/src/core/mod_manifest.cpp" \
+    -I"$root/src" -I"$root/include"
+
+echo
+echo "== mod manifests and what runs =="
+rm -rf "$work/mods-test"
+"$qemu" -L "$sysroot" "$work/test_mods" "$work/mods-test"
+
 zlib_prefix="${ZLIB_AARCH64:-/opt/zlib-aarch64}"
 if [ -f "$zlib_prefix/lib/libz.a" ]; then
     "$cxx" -O1 -g -o "$work/test_apk_assets" \

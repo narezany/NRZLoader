@@ -4,6 +4,8 @@
 
 #include <atomic>
 #include <cmath>
+#include <map>
+#include <mutex>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -50,12 +52,32 @@ const Named kNames[kEffectCount] = {
 
 // Written from whichever thread runs the mod, read on the render thread.
 std::atomic<float> g_amounts[kEffectCount];
-std::atomic<bool> g_any{false};
+std::atomic<bool> g_builtin_any{false};
 std::atomic<bool> g_running{false};
+
+// A shader the mod wrote, and the values it reads. Compiling needs the
+// graphics context, so the source is left here and picked up by the thread
+// that draws.
+std::mutex g_custom_mutex;
+std::string g_pending_source;
+bool g_pending_waiting = false;
+bool g_pending_clear = false;
+std::map<std::string, float> g_custom_uniforms;
+std::atomic<bool> g_custom_active{false};
+std::string g_custom_error;
 
 void clear_all() {
     for (size_t index = 0; index < kEffectCount; ++index) g_amounts[index].store(0.0f);
-    g_any.store(false);
+    g_builtin_any.store(false);
+}
+
+// Something is drawn when a built-in effect is on, when the mod's shader is
+// running, or when one is waiting to be compiled.
+bool anything_to_draw() {
+    if (g_builtin_any.load() || g_custom_active.load()) return true;
+
+    std::lock_guard<std::mutex> lock(g_custom_mutex);
+    return g_pending_waiting || g_pending_clear;
 }
 
 #if defined(__ANDROID__)
@@ -215,7 +237,7 @@ Resources g_gpu;
 double g_started_at = 0.0;
 uint64_t g_frames = 0;
 
-GLuint compile(GLenum type, const char* source) {
+GLuint compile(GLenum type, const char* source, std::string* trouble = nullptr) {
     GLuint shader = glCreateShader(type);
     if (shader == 0) return 0;
 
@@ -225,43 +247,74 @@ GLuint compile(GLenum type, const char* source) {
     GLint compiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (compiled == GL_FALSE) {
-        char message[512] = {};
+        char message[1024] = {};
         glGetShaderInfoLog(shader, sizeof(message) - 1, nullptr, message);
         MCBE_LOGE("screen effect shader did not compile: %s", message);
+        if (trouble != nullptr) *trouble = message;
         glDeleteShader(shader);
         return 0;
     }
     return shader;
 }
 
-bool build_program(Resources& gpu) {
-    GLuint vertex = compile(GL_VERTEX_SHADER, kVertexSource);
-    GLuint fragment = compile(GL_FRAGMENT_SHADER, kFragmentSource);
+/**
+ * Wraps what a mod wrote in the parts every one of these shaders needs.
+ *
+ * A mod should not have to remember the boilerplate, and repeating it would
+ * mean a mod could get it wrong in ways that only show up on some phones. What
+ * is left to the mod is the part that differs: either a `vec3 effect(vec2 uv)`
+ * or, when it wants full control, its own `main`.
+ */
+std::string wrap_custom(const std::string& source) {
+    std::string full =
+        "precision mediump float;\n"
+        "varying vec2 vUv;\n"
+        "uniform sampler2D uTex;\n"
+        "uniform vec2 uRes;\n"
+        "uniform float uTime;\n";
+    full += source;
+
+    if (source.find("void main") == std::string::npos) {
+        full += "\nvoid main() { gl_FragColor = vec4(effect(vUv), 1.0); }\n";
+    }
+    return full;
+}
+
+/** Links a fragment shader against the shared vertex shader. */
+GLuint link_program(const std::string& fragment_source, std::string* trouble) {
+    GLuint vertex = compile(GL_VERTEX_SHADER, kVertexSource, trouble);
+    GLuint fragment = compile(GL_FRAGMENT_SHADER, fragment_source.c_str(), trouble);
     if (vertex == 0 || fragment == 0) {
         if (vertex != 0) glDeleteShader(vertex);
         if (fragment != 0) glDeleteShader(fragment);
-        return false;
+        return 0;
     }
 
-    gpu.program = glCreateProgram();
-    glAttachShader(gpu.program, vertex);
-    glAttachShader(gpu.program, fragment);
-    glLinkProgram(gpu.program);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vertex);
+    glAttachShader(program, fragment);
+    glLinkProgram(program);
 
     // The shaders belong to the program now.
     glDeleteShader(vertex);
     glDeleteShader(fragment);
 
     GLint linked = 0;
-    glGetProgramiv(gpu.program, GL_LINK_STATUS, &linked);
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
     if (linked == GL_FALSE) {
-        char message[512] = {};
-        glGetProgramInfoLog(gpu.program, sizeof(message) - 1, nullptr, message);
+        char message[1024] = {};
+        glGetProgramInfoLog(program, sizeof(message) - 1, nullptr, message);
         MCBE_LOGE("screen effect program did not link: %s", message);
-        glDeleteProgram(gpu.program);
-        gpu.program = 0;
-        return false;
+        if (trouble != nullptr) *trouble = message;
+        glDeleteProgram(program);
+        return 0;
     }
+    return program;
+}
+
+bool build_program(Resources& gpu) {
+    gpu.program = link_program(kFragmentSource, nullptr);
+    if (gpu.program == 0) return false;
 
     gpu.position_attribute = glGetAttribLocation(gpu.program, "aPos");
     gpu.texture_uniform = glGetUniformLocation(gpu.program, "uTex");
@@ -271,6 +324,73 @@ bool build_program(Resources& gpu) {
         gpu.amount_uniforms[index] = glGetUniformLocation(gpu.program, kNames[index].uniform);
     }
     return true;
+}
+
+/**
+ * The mod's own shader, once it has been through the graphics driver.
+ *
+ * Where a uniform lives is fixed for the life of a program, so the places the
+ * mod's named values go are looked up once and kept.
+ */
+struct Custom {
+    GLuint program = 0;
+    GLint position_attribute = -1;
+    GLint texture_uniform = -1;
+    GLint resolution_uniform = -1;
+    GLint time_uniform = -1;
+    std::map<std::string, GLint> value_uniforms;
+};
+
+Custom g_custom;
+
+void drop_custom() {
+    if (g_custom.program != 0) glDeleteProgram(g_custom.program);
+    g_custom = Custom();
+    g_custom_active.store(false);
+}
+
+/** Takes up whatever the mod left waiting. Runs on the drawing thread. */
+void adopt_pending_shader() {
+    std::string source;
+    bool clear = false;
+    {
+        std::lock_guard<std::mutex> lock(g_custom_mutex);
+        if (!g_pending_waiting && !g_pending_clear) return;
+
+        source = g_pending_source;
+        clear = g_pending_clear;
+        g_pending_source.clear();
+        g_pending_waiting = false;
+        g_pending_clear = false;
+    }
+
+    drop_custom();
+    if (clear) {
+        MCBE_LOGI("back to the built-in screen effects");
+        return;
+    }
+
+    std::string trouble;
+    const GLuint program = link_program(wrap_custom(source), &trouble);
+
+    std::lock_guard<std::mutex> lock(g_custom_mutex);
+    if (program == 0) {
+        g_custom_error = trouble.empty() ? "the shader would not build" : trouble;
+        return;
+    }
+
+    g_custom.program = program;
+    g_custom.position_attribute = glGetAttribLocation(program, "aPos");
+    g_custom.texture_uniform = glGetUniformLocation(program, "uTex");
+    g_custom.resolution_uniform = glGetUniformLocation(program, "uRes");
+    g_custom.time_uniform = glGetUniformLocation(program, "uTime");
+    for (const auto& pair : g_custom_uniforms) {
+        g_custom.value_uniforms[pair.first] = glGetUniformLocation(program, pair.first.c_str());
+    }
+
+    g_custom_error.clear();
+    g_custom_active.store(true);
+    MCBE_LOGI("the mod's own shader is drawing");
 }
 
 bool prepare(Resources& gpu, GLint width, GLint height) {
@@ -334,7 +454,7 @@ struct SavedState {
     GLboolean stencil = GL_FALSE;
     GLboolean dither = GL_FALSE;
 
-    GLint attribute = 0;
+    GLint attribute = -1;
     GLint attribute_enabled = 0;
     GLint attribute_size = 0;
     GLint attribute_type = 0;
@@ -343,9 +463,7 @@ struct SavedState {
     GLint attribute_buffer = 0;
     void* attribute_pointer = nullptr;
 
-    void save(GLint attribute_index) {
-        attribute = attribute_index;
-
+    void save() {
         glGetIntegerv(GL_CURRENT_PROGRAM, &program);
         glGetIntegerv(GL_ACTIVE_TEXTURE, &active_texture);
         glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &array_buffer);
@@ -364,6 +482,18 @@ struct SavedState {
 
         glActiveTexture(GL_TEXTURE0);
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture_2d);
+    }
+
+    /**
+     * The one vertex attribute this code touches, saved separately.
+     *
+     * Which attribute that is depends on the program about to draw, and the
+     * mod can replace that program between one frame and the next. Saving the
+     * wrong one would leave the game's own attribute enabled with this code's
+     * buffer under it.
+     */
+    void save_attribute(GLint attribute_index) {
+        attribute = attribute_index;
 
         if (attribute >= 0) {
             glGetVertexAttribiv(attribute, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &attribute_enabled);
@@ -427,7 +557,7 @@ double now_seconds() {
 }
 
 void draw(void* display, void* surface) {
-    if (!g_any.load()) return;
+    if (!anything_to_draw()) return;
     if (g_query_surface == nullptr) return;
 
     int width = 0;
@@ -444,12 +574,23 @@ void draw(void* display, void* surface) {
     }
 
     SavedState saved;
-    saved.save(g_gpu.program == 0 ? 0 : g_gpu.position_attribute);
+    saved.save();
 
     if (g_bind_vertex_array != nullptr) g_bind_vertex_array(0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     if (!prepare(g_gpu, width, height)) {
+        saved.restore();
+        return;
+    }
+
+    // A shader the mod supplied can only be built here, where the graphics
+    // context is.
+    adopt_pending_shader();
+
+    // Nothing left to draw: the mod may have just taken its shader away and
+    // switched no built-in effect on in its place.
+    if (!g_custom_active.load() && !g_builtin_any.load()) {
         saved.restore();
         return;
     }
@@ -467,19 +608,42 @@ void draw(void* display, void* surface) {
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glViewport(0, 0, width, height);
 
-    glUseProgram(g_gpu.program);
-    glUniform1i(g_gpu.texture_uniform, 0);
-    glUniform2f(g_gpu.resolution_uniform, static_cast<float>(width), static_cast<float>(height));
-    glUniform1f(g_gpu.time_uniform, static_cast<float>(now_seconds() - g_started_at));
-    for (size_t index = 0; index < kEffectCount; ++index) {
-        if (g_gpu.amount_uniforms[index] < 0) continue;
-        glUniform1f(g_gpu.amount_uniforms[index], g_amounts[index].load());
+    const bool custom = g_custom_active.load();
+    const float elapsed = static_cast<float>(now_seconds() - g_started_at);
+    const GLint position = custom ? g_custom.position_attribute : g_gpu.position_attribute;
+
+    glUseProgram(custom ? g_custom.program : g_gpu.program);
+    glUniform1i(custom ? g_custom.texture_uniform : g_gpu.texture_uniform, 0);
+    glUniform2f(custom ? g_custom.resolution_uniform : g_gpu.resolution_uniform,
+                static_cast<float>(width), static_cast<float>(height));
+    glUniform1f(custom ? g_custom.time_uniform : g_gpu.time_uniform, elapsed);
+
+    if (custom) {
+        // Whatever the mod named, in the places this program keeps them. A
+        // name the shader never declared has a location of -1, which the
+        // driver ignores, so a stale value costs nothing.
+        std::lock_guard<std::mutex> lock(g_custom_mutex);
+        for (const auto& pair : g_custom_uniforms) {
+            auto found = g_custom.value_uniforms.find(pair.first);
+            if (found == g_custom.value_uniforms.end()) {
+                found = g_custom.value_uniforms
+                            .emplace(pair.first,
+                                     glGetUniformLocation(g_custom.program, pair.first.c_str()))
+                            .first;
+            }
+            if (found->second >= 0) glUniform1f(found->second, pair.second);
+        }
+    } else {
+        for (size_t index = 0; index < kEffectCount; ++index) {
+            if (g_gpu.amount_uniforms[index] < 0) continue;
+            glUniform1f(g_gpu.amount_uniforms[index], g_amounts[index].load());
+        }
     }
 
+    saved.save_attribute(position);
     glBindBuffer(GL_ARRAY_BUFFER, g_gpu.buffer);
-    glEnableVertexAttribArray(static_cast<GLuint>(g_gpu.position_attribute));
-    glVertexAttribPointer(static_cast<GLuint>(g_gpu.position_attribute), 2, GL_FLOAT, GL_FALSE, 0,
-                          nullptr);
+    glEnableVertexAttribArray(static_cast<GLuint>(position));
+    glVertexAttribPointer(static_cast<GLuint>(position), 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
     saved.restore();
@@ -541,7 +705,7 @@ size_t set(const std::string& spec) {
         for (size_t index = 0; index < kEffectCount; ++index) {
             if (name != kNames[index].name) continue;
             g_amounts[index].store(amount);
-            if (amount > 0.0f) g_any.store(true);
+            if (amount > 0.0f) g_builtin_any.store(true);
             known = true;
             ++recognised;
             break;
@@ -568,6 +732,34 @@ std::string describe() {
 }
 
 bool running() { return g_running.load(); }
+
+void set_shader(const std::string& source) {
+    std::lock_guard<std::mutex> lock(g_custom_mutex);
+    g_pending_source = source;
+    g_pending_waiting = true;
+    g_pending_clear = false;
+    g_custom_error.clear();
+}
+
+void clear_shader() {
+    std::lock_guard<std::mutex> lock(g_custom_mutex);
+    g_pending_source.clear();
+    g_pending_waiting = false;
+    g_pending_clear = true;
+    g_custom_error.clear();
+}
+
+void set_uniform(const std::string& name, float value) {
+    std::lock_guard<std::mutex> lock(g_custom_mutex);
+    g_custom_uniforms[name] = value;
+}
+
+std::string shader_error() {
+    std::lock_guard<std::mutex> lock(g_custom_mutex);
+    return g_custom_error;
+}
+
+bool shader_active() { return g_custom_active.load(); }
 
 #if defined(__ANDROID__)
 

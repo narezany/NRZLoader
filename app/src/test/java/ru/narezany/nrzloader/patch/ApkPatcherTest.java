@@ -29,6 +29,7 @@ public final class ApkPatcherTest {
         File output = new File(args[1]);
 
         ApkPatcher.Options options = new ApkPatcher.Options();
+        options.loaderVersion = "1.1.0";
         options.loaderLibrary = Files.readAllBytes(Paths.get(args[2]));
         options.bootstrapDex = Files.readAllBytes(Paths.get(args[3]));
         options.applicationLabel = "NRZLoader";
@@ -50,6 +51,25 @@ public final class ApkPatcherTest {
             check(patched.getEntry("classes2.dex") != null, "bootstrap classes present");
             check(patched.getEntry("classes.dex") != null, "original classes kept");
             check(patched.getEntry("assets/keep.txt") != null, "unrelated assets kept");
+
+            // The launcher reads this back to say which loader an install
+            // carries, which is what makes a mod's version requirement mean
+            // anything.
+            ZipEntry stamp = patched.getEntry("assets/nrzloader.version");
+            check(stamp != null, "the loader version was recorded");
+            if (stamp != null) {
+                byte[] recorded = new byte[(int) stamp.getSize()];
+                try (InputStream stream = patched.getInputStream(stamp)) {
+                    int read = 0;
+                    while (read < recorded.length) {
+                        int step = stream.read(recorded, read, recorded.length - read);
+                        if (step < 0) break;
+                        read += step;
+                    }
+                }
+                check(new String(recorded, "UTF-8").equals("1.1.0"),
+                        "and it says what the patcher was told");
+            }
 
             ZipEntry loader = patched.getEntry("lib/arm64-v8a/libnrzloader.so");
             check(loader.getMethod() == ZipEntry.STORED, "loader is stored uncompressed");

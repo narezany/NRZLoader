@@ -67,4 +67,12 @@
     <string name="overlay_title">Windows on top of the game</string>
     <string name="overlay_body">Mods can draw their own panels over the game — a coordinate readout, a control panel. Android asks for this one separately.</string>
     <string name="overlay_action">Allow windows</string>
+    <string name="loader_version">NRZLoader %s</string>
+    <string name="game_patched_with">with loader %s</string>
+    <string name="game_outdated_title">The game was built by an older loader</string>
+    <string name="game_outdated_body">Inside the game sits loader %1$s, the launcher now carries %2$s. Build the modded version again to bring it up.</string>
+
+    <string name="mod_settings">Settings</string>
+    <string name="mod_settings_save">Save</string>
+    <string name="mod_needs_loader">Needs loader %1$s, this one is %2$s</string>
 </resources>
