@@ -53,36 +53,59 @@ std::chrono::steady_clock::time_point g_started;
 std::chrono::steady_clock::time_point g_last_report;
 
 /**
- * Сколько раз за игровой такт срабатывает всё остальное.
+ * Такт игры — тот, чья скорость не гуляет.
  *
- * Игра живёт тактами по двадцать в секунду, и почти всё, что она делает,
- * привязано к ним: что-то раз за такт, что-то трижды за кадр. Поэтому если
- * взять верное число тактов за основу, остальные счётчики поделятся на него
- * нацело — а неверное такого не даст. Это и есть способ найти основу, не
- * спрашивая у игры, сколько она проработала.
+ * Первая попытка искала основу так: чьё число делит остальные нацело. На
+ * живой игре это выбрало кадры, а не такты, — кадров больше, и делится на них
+ * тоже многое. Разница же в другом: такт игра держит ровно двадцать раз в
+ * секунду, чего бы ей это ни стоило, а кадры проседают на каждом чихе.
+ *
+ * Поэтому основа ищется по постоянству: за одинаковые промежутки времени у
+ * такта одно и то же число, у кадров — каждый раз разное.
  */
+struct Rate {
+    uint64_t last = 0;
+    uint64_t smallest = ~0ull;
+    uint64_t largest = 0;
+    int windows = 0;
+
+    void observe(uint64_t total) {
+        const uint64_t delta = total - last;
+        last = total;
+        if (delta == 0) return;
+
+        smallest = std::min(smallest, delta);
+        largest = std::max(largest, delta);
+        ++windows;
+    }
+
+    /** Насколько скорость гуляет, в долях. У такта почти ноль. */
+    double wobble() const {
+        if (windows < 3 || largest == 0) return 1.0;
+        return static_cast<double>(largest - smallest) / largest;
+    }
+};
+
+Rate g_rates[kMaxSlots];
+
 uint64_t find_base(const std::vector<std::pair<uint64_t, size_t>>& hits) {
     uint64_t best = 0;
-    size_t best_score = 0;
+    double best_wobble = 0.08;  // больше восьми процентов — это уже не такт
 
-    for (const auto& candidate : hits) {
-        if (candidate.first < 100) continue;
+    for (const auto& hit : hits) {
+        if (hit.first < 100) continue;
 
-        size_t score = 0;
-        for (const auto& other : hits) {
-            const double ratio = static_cast<double>(other.first) / candidate.first;
-            if (ratio < 0.999) continue;
-            if (std::fabs(ratio - std::round(ratio)) < 0.005) ++score;
-        }
+        const double wobble = g_rates[hit.second].wobble();
+        if (wobble > best_wobble) continue;
 
-        // При равенстве берётся меньшее: такт делит и кадры, и всё прочее, а
-        // кадры такт уже не делят.
-        if (score > best_score || (score == best_score && best != 0 && candidate.first < best)) {
-            best_score = score;
-            best = candidate.first;
+        // Из ровных берётся самый редкий: такт один, а кратные ему идут
+        // вдвое и втрое чаще и так же ровно.
+        if (best == 0 || hit.first < best) {
+            best = hit.first;
+            best_wobble = wobble;
         }
     }
-    return best_score >= 3 ? best : 0;
+    return best;
 }
 
 std::string trim(const std::string& text) {
@@ -160,6 +183,7 @@ void append_timeline(double seconds) {
         const uint64_t total = nrz_probe_slots[slot].count;
         const uint64_t delta = total - g_timeline_previous[slot];
         g_timeline_previous[slot] = total;
+        g_rates[slot].observe(total);
         if (delta == 0) continue;
 
         if (anything) line << ", ";
@@ -221,8 +245,7 @@ void write_report() {
     out << "сработало мест: " << hits.size() << "\n"
         << "игра идёт: " << static_cast<long>(seconds) << " с\n";
     if (base != 0) {
-        out << "такт игры: " << base << " раз, это "
-            << static_cast<long>(base / std::max(seconds, 1.0) + 0.5) << " в секунду\n";
+        out << "тактов было: " << base << "\n";
     }
     out << "\n";
 
@@ -233,14 +256,20 @@ void write_report() {
         const uint64_t delta = total - g_previous[slot];
         g_previous[slot] = total;
 
+        // Ровная скорость значит привязку к такту, гуляющая — к кадрам:
+        // такт игра держит любой ценой, а кадры проседают.
         std::string per_tick = "—";
         if (base != 0) {
             const double ratio = static_cast<double>(total) / base;
-            char text[32] = {};
-            if (std::fabs(ratio - std::round(ratio)) < 0.005 && ratio >= 0.999) {
+            const bool steady = g_rates[slot].wobble() <= 0.08;
+            char text[40] = {};
+
+            if (steady && std::fabs(ratio - std::round(ratio)) < 0.02 && ratio >= 0.98) {
                 snprintf(text, sizeof(text), "%.0f за такт", std::round(ratio));
-            } else {
+            } else if (steady) {
                 snprintf(text, sizeof(text), "%.2f за такт", ratio);
+            } else {
+                snprintf(text, sizeof(text), "%.1f за такт, скачет", ratio);
             }
             per_tick = text;
         }
@@ -254,9 +283,10 @@ void write_report() {
     if (hits.empty()) {
         out << "  пока ни одного. Зайдите в мир и подвигайтесь.\n";
     } else {
-        out << "\nРовное число за такт — метод, который зовут при каждом такте.\n"
-            << "Столбец справа считается заново каждые пятнадцать секунд: сделайте\n"
-            << "что-то одно и посмотрите, у какого слота там появилось число.\n";
+        out << "\n«за такт» без пометки — привязан к такту игры, он ровно 20 в\n"
+            << "секунду. «скачет» — привязан к кадрам, а их число гуляет.\n"
+            << "Остальное ищите в slots-timeline.txt: там видно, что срабатывало\n"
+            << "в ту секунду, когда вы что-то делали.\n";
     }
 
     std::ofstream file(g_report_path, std::ios::trunc);
