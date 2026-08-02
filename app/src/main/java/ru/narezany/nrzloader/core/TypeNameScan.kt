@@ -30,7 +30,11 @@ object TypeNameScan {
 
         internal fun add(name: String, wanted: Set<String>) {
             names++
+            // Класс внутри пространства имён — это всё тот же класс, поэтому
+            // он засчитывается и по последнему куску имени.
+            val short = name.substringAfterLast("::")
             if (name in wanted) found.add(name)
+            if (short in wanted) found.add(short)
             if (samples.size < 40) samples.add(name)
         }
     }
@@ -44,6 +48,16 @@ object TypeNameScan {
         val patterns = anchors.associateWith { it.toByteArray(Charsets.US_ASCII) }
         anchors.forEach { tally.anchors[it] = 0 }
 
+        scanInto(stream, tally, wanted, patterns)
+        return tally
+    }
+
+    private fun scanInto(
+        stream: InputStream,
+        tally: Tally,
+        wanted: Set<String>,
+        patterns: Map<String, ByteArray>,
+    ) {
         val buffer = ByteArray(CHUNK + OVERLAP)
         var carried = 0
         var atEnd = false
@@ -62,7 +76,8 @@ object TypeNameScan {
 
             var at = 0
             while (at < limit) {
-                nameAt(buffer, at, filled)?.let { tally.add(it, wanted) }
+                val name = nameAt(buffer, at, filled) ?: nestedAt(buffer, at, filled)
+                if (name != null) tally.add(name, wanted)
                 at++
             }
 
@@ -74,7 +89,88 @@ object TypeNameScan {
             carried = filled - limit
             if (carried > 0) System.arraycopy(buffer, limit, buffer, 0, carried)
         }
+    }
+
+    /**
+     * То же самое, но только в перечисленных кусках файла.
+     *
+     * Куски должны идти по возрастанию смещения: поток проматывается вперёд и
+     * назад не отматывается.
+     *
+     * @param regions пары «смещение, длина»
+     */
+    fun scanRegions(
+        stream: InputStream,
+        regions: List<Pair<Long, Long>>,
+        wanted: Set<String>,
+        anchors: List<String>,
+    ): Tally {
+        val tally = Tally()
+        val patterns = anchors.associateWith { it.toByteArray(Charsets.US_ASCII) }
+        anchors.forEach { tally.anchors[it] = 0 }
+
+        var position = 0L
+        for ((offset, size) in regions.sortedBy { it.first }) {
+            if (offset < position) continue
+            stream.skipFully(offset - position)
+            position = offset
+
+            scanInto(LimitedInput(stream, size), tally, wanted, patterns)
+            position += size
+        }
         return tally
+    }
+
+    /** Отдаёт ровно `left` байт и делает вид, что дальше файл кончился. */
+    private class LimitedInput(private val source: InputStream, private var left: Long) :
+        InputStream() {
+        override fun read(): Int = throw UnsupportedOperationException()
+
+        override fun read(into: ByteArray, at: Int, count: Int): Int {
+            if (left <= 0) return -1
+            val step = source.read(into, at, minOf(count.toLong(), left).toInt())
+            if (step > 0) left -= step
+            return step
+        }
+    }
+
+    /**
+     * Имя внутри пространства имён: `N`, дальше пары «длина, кусок», потом
+     * `E`. Так записаны, например, вложенные классы, и без этого их не видно
+     * вовсе — а именно так называется добрая половина того, что нужно.
+     */
+    fun nestedAt(buffer: ByteArray, start: Int, filled: Int): String? {
+        if (start > 0 && isNameChar(buffer[start - 1])) return null
+        if (start >= filled || buffer[start] != 'N'.code.toByte()) return null
+
+        var at = start + 1
+        val parts = ArrayList<String>(4)
+
+        while (at < filled && buffer[at] != 'E'.code.toByte()) {
+            var declared = 0
+            var digits = 0
+            while (at < filled && buffer[at] >= ZERO && buffer[at] <= NINE) {
+                declared = declared * 10 + (buffer[at] - ZERO)
+                digits++
+                at++
+                if (digits > 3) return null
+            }
+            if (digits == 0 || declared < 1 || declared > 80) return null
+            if (at + declared > filled) return null
+
+            for (index in at until at + declared) {
+                if (!isNameChar(buffer[index])) return null
+            }
+            parts.add(String(buffer, at, declared, Charsets.US_ASCII))
+            at += declared
+            if (parts.size > 8) return null
+        }
+
+        if (at >= filled || buffer[at] != 'E'.code.toByte()) return null
+        if (at + 1 >= filled || buffer[at + 1] != 0.toByte()) return null
+        if (parts.isEmpty()) return null
+
+        return parts.joinToString("::")
     }
 
     /** Имя, начинающееся ровно в этой позиции, или null. */

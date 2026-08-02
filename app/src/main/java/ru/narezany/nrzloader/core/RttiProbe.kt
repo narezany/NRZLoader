@@ -43,6 +43,7 @@ object RttiProbe {
 
     data class Result(
         val libraryBytes: Long,
+        val sectionsScanned: List<String>,
         val classNames: Int,
         val found: List<String>,
         val missing: List<String>,
@@ -73,12 +74,30 @@ object RttiProbe {
             val entry = zip.getEntry(LIBRARY)
                 ?: throw IllegalStateException("в пакете нет $LIBRARY")
 
-            val tally = zip.getInputStream(entry).use {
-                TypeNameScan.scan(it, WANTED.toSet(), ANCHORS)
+            val open = { zip.getInputStream(entry) }
+
+            // Имена ищутся только в данных. Две трети библиотеки — машинный
+            // код, и узор «цифра, пара букв, ноль» встречается в нём тысячи
+            // раз просто так; без этого ограничения счётчик врёт.
+            val sections = runCatching { ElfLayout.dataSections(ElfLayout.read(open)) }
+                .getOrDefault(emptyList())
+
+            val tally = open().use { stream ->
+                if (sections.isEmpty()) {
+                    TypeNameScan.scan(stream, WANTED.toSet(), ANCHORS)
+                } else {
+                    TypeNameScan.scanRegions(
+                        stream,
+                        sections.map { it.offset to it.size },
+                        WANTED.toSet(),
+                        ANCHORS,
+                    )
+                }
             }
 
             return Result(
                 libraryBytes = entry.size,
+                sectionsScanned = sections.map { it.name },
                 classNames = tally.names,
                 found = WANTED.filter { it in tally.found },
                 missing = WANTED.filterNot { it in tally.found },
@@ -101,6 +120,10 @@ object RttiProbe {
                 appendLine("NRZLoader ${LoaderVersion.VALUE} — проверка RTTI")
                 appendLine("игра: ${install.packageName} ${install.versionName}")
                 appendLine("библиотека: ${result.libraryBytes / (1024 * 1024)} МБ")
+                appendLine(
+                    "просмотрено: " +
+                        result.sectionsScanned.joinToString(", ").ifBlank { "весь файл" }
+                )
                 appendLine()
                 appendLine("имён классов в данных: ${result.classNames}")
                 appendLine("из ожидаемых нашлось: ${result.found.size} из ${WANTED.size}")
