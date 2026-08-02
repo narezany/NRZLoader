@@ -197,14 +197,25 @@ object RttiProbe {
                             .filter { it.kind == VtableFinder.Kind.VTABLE }
                             .groupBy { it.name }
 
-                        vtables.entries.sortedBy { it.key }.forEach { (name, all) ->
-                            val main = all.maxByOrNull { it.methodSlots } ?: return@forEach
-                            appendLine(
-                                "  %-14s 0x%08x, методов %d%s".format(
-                                    name, main.vtableAddress, main.methodSlots,
-                                    if (all.size > 1) " (ещё ${all.size - 1} вторичных)" else ""
+                        // Здесь только те, о которых спрашивали: таблиц в
+                        // игре тысячи, и все они уходят в vtables.conf.
+                        vtables.entries
+                            .filter { it.key in WANTED }
+                            .sortedBy { it.key }
+                            .forEach { (name, all) ->
+                                val main = all.maxByOrNull { it.methodSlots } ?: return@forEach
+                                appendLine(
+                                    "  %-14s 0x%08x, методов %d%s".format(
+                                        name, main.vtableAddress, main.methodSlots,
+                                        if (all.size > 1) " (ещё ${all.size - 1} вторичных)" else ""
+                                    )
                                 )
-                            )
+                            }
+
+                        val others = vtables.keys.count { it !in WANTED }
+                        if (others > 0) {
+                            appendLine()
+                            appendLine("  ещё $others классов — в config/vtables.conf")
                         }
 
                         // Ссылка на typeinfo без методов за ней — это класс,

@@ -101,7 +101,19 @@ object VtableFinder {
 
         // Шаг второй: кто ссылается на имя. Это второе поле typeinfo, значит
         // сама структура начинается на восемь байт раньше.
-        val byAddress = addresses.entries.associate { it.value to it.key }
+        //
+        // Берутся все имена, а не только искомые. Голых Actor в игре не
+        // бывает: каждая сущность — Mob, ItemActor, Boat, и у каждого класса
+        // своя копия таблицы. Подменять надо ту, что у создаваемого класса,
+        // поэтому нужны все.
+        val byAddress = HashMap<Long, String>(allNames.size)
+        for ((at, name) in allNames) {
+            if (name.length < 3) continue
+            // Класс из пространства имён зовётся коротко, если о нём и
+            // спрашивали коротко: mce::ItemStack и ItemStack — одно и то же.
+            val short = name.substringAfterLast("::")
+            byAddress[at] = if (short in wanted) short else name
+        }
         val typeInfos = HashMap<Long, String>()
         var pointersRead = 0L
         var nonZero = 0L
@@ -141,10 +153,15 @@ object VtableFinder {
                 ""
             }
 
+            // Ссылок на typeinfo много: у Packet их за две сотни. В список
+            // идут только настоящие таблицы и потомки тех классов, о которых
+            // спрашивали, — иначе он вырастет на десятки тысяч строк.
+            if (slots == 0 && name !in wanted) return@forEachPointer
+
             found.add(
                 Found(
                     name = name,
-                    nameAddress = addresses.getValue(name),
+                    nameAddress = addresses[name] ?: 0L,
                     typeInfoAddress = value,
                     vtableAddress = vtable,
                     methodSlots = slots,
