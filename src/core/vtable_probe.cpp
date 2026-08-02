@@ -52,6 +52,8 @@ uint64_t g_previous[kMaxSlots] = {};
 uint64_t g_timeline_previous[kMaxSlots] = {};
 std::chrono::steady_clock::time_point g_started;
 std::chrono::steady_clock::time_point g_last_report;
+bool g_want_panel = false;
+int g_windows = 0;
 
 /**
  * Такт игры — тот, чья скорость не гуляет.
@@ -69,6 +71,7 @@ struct Rate {
     uint64_t smallest = ~0ull;
     uint64_t largest = 0;
     int windows = 0;
+    int active = 0;
 
     void observe(uint64_t total) {
         const uint64_t delta = total - last;
@@ -78,12 +81,24 @@ struct Rate {
         smallest = std::min(smallest, delta);
         largest = std::max(largest, delta);
         ++windows;
+        ++active;
     }
 
     /** Насколько скорость гуляет, в долях. У такта почти ноль. */
     double wobble() const {
         if (windows < 3 || largest == 0) return 1.0;
         return static_cast<double>(largest - smallest) / largest;
+    }
+
+    /**
+     * Такт идёт непрерывно, поэтому попадает в каждое окно.
+     *
+     * Без этой проверки за такт принималось что попало: метод, срабатывающий
+     * пачками ровно по пять, тоже держит скорость ровно — но только в тех
+     * окнах, где он вообще был.
+     */
+    bool constant(int total_windows) const {
+        return total_windows >= 5 && active * 10 >= total_windows * 8;
     }
 };
 
@@ -95,6 +110,8 @@ uint64_t find_base(const std::vector<std::pair<uint64_t, size_t>>& hits) {
 
     for (const auto& hit : hits) {
         if (hit.first < 100) continue;
+
+        if (!g_rates[hit.second].constant(g_windows)) continue;
 
         const double wobble = g_rates[hit.second].wobble();
         if (wobble > best_wobble) continue;
@@ -175,6 +192,7 @@ bool make_writable(void* address, size_t length) {
  * секунду делал, он помнит и так.
  */
 void append_timeline(double seconds);
+std::string panel_html();
 
 }  // namespace
 
@@ -182,6 +200,7 @@ namespace {
 
 void append_timeline(double seconds) {
     if (g_timeline_path.empty()) return;
+    ++g_windows;
 
     std::ostringstream line;
     bool anything = false;
@@ -207,6 +226,22 @@ void append_timeline(double seconds) {
 void worker() {
     const auto start = std::chrono::steady_clock::now();
 
+    // Панель открывается отсюда, а не на пути запуска игры: окно создаётся
+    // средствами Android, и просить их об этом, пока приложение само не
+    // достроено, — верный способ подвесить загрузку мира. К пятнадцатой
+    // секунде игра давно на ногах.
+    if (g_want_panel) {
+        std::this_thread::sleep_for(std::chrono::seconds(15));
+
+        const std::string trouble = overlay::trouble();
+        if (trouble.empty()) {
+            overlay::open("nrz.probe", panel_html(), 8, 8, 150, 0, true);
+            MCBE_LOGI("панель отметок открыта");
+        } else {
+            MCBE_LOGW("панель отметок не открыть: %s", trouble.c_str());
+        }
+    }
+
     // Отчёт пишется реже ленты: он для чтения целиком, а лента для того,
     // чтобы поймать момент.
     int step = 0;
@@ -230,22 +265,41 @@ constexpr const char* kActions[] = {
 std::string panel_html() {
     std::ostringstream page;
     page << "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
-         << "<style>"
-         << "*{box-sizing:border-box}"
-         << "body{margin:0;font:12px/1.2 sans-serif;color:#fff}"
-         << ".c{background:rgba(18,18,22,.88);border-radius:12px;padding:8px}"
-         << ".t{font-size:10px;opacity:.55;margin:0 2px 6px;text-transform:uppercase}"
-         << ".g{display:grid;grid-template-columns:1fr 1fr;gap:4px}"
-         << "button{appearance:none;border:0;border-radius:8px;padding:8px 4px;"
-         << "background:rgba(255,255,255,.1);color:#fff;font:inherit}"
-         << "button:active{background:rgba(120,220,150,.45)}"
-         << "</style><div class=c><p class=t>жми ПЕРЕД действием</p><div class=g>";
+            "<style>"
+            "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;"
+              "user-select:none}"
+            "body{margin:0;font:600 10px/1 -apple-system,Roboto,sans-serif;color:#e8ecf1}"
+            ".w{background:rgba(12,14,18,.66);backdrop-filter:blur(12px);border-radius:12px;"
+              "border:1px solid rgba(255,255,255,.08)}"
+            ".h{display:flex;align-items:center;gap:6px;padding:7px 9px}"
+            ".d{width:6px;height:6px;border-radius:50%;background:#5fd28d}"
+            ".n{flex:1;opacity:.5;letter-spacing:.08em}"
+            ".g{display:none;grid-template-columns:1fr 1fr;gap:3px;padding:0 6px 6px}"
+            ".o .g{display:grid}"
+            "b{border:0;border-radius:8px;padding:7px 3px;background:rgba(255,255,255,.07);"
+              "color:inherit;font:inherit}"
+            "b:active{background:#5fd28d;color:#0b120e}"
+            "</style>"
+            "<div class=w id=w><div class=h onclick=\"t()\">"
+              "<span class=d></span><span class=n id=n>ОТМЕТКИ</span><span id=a>+</span>"
+            "</div><div class=g>";
 
     for (const char* action : kActions) {
-        page << "<button onclick=\"m('" << action << "')\">" << action << "</button>";
+        page << "<b onclick=\"m(event,'" << action << "')\">" << action << "</b>";
     }
 
-    page << "</div></div><script>function m(t){nrzhost.send('nrz:mark '+t)}</script>";
+    // Свёрнутая по умолчанию: развёрнутая занимала пол-экрана, и по ней
+    // попадали случайно, целясь в игру.
+    page << "</div></div><script>"
+            "var o=0,w=document.getElementById('w');"
+            "function t(){o=!o;w.className=o?'w o':'w';"
+              "document.getElementById('a').textContent=o?'\u2212':'+';"
+              "document.getElementById('n').textContent=o?'\u041e\u0422\u041c\u0415\u0422\u041a\u0418':''}"
+            "function m(e,x){e.stopPropagation();nrzhost.send('nrz:mark '+x);"
+              "var d=document.querySelector('.d');d.style.background='#ffd166';"
+              "setTimeout(function(){d.style.background='#5fd28d'},600)}"
+            "t();t();"
+            "</script>";
     return page.str();
 }
 
@@ -312,7 +366,8 @@ void write_report() {
         std::string per_tick = "—";
         if (base != 0) {
             const double ratio = static_cast<double>(total) / base;
-            const bool steady = g_rates[slot].wobble() <= 0.08;
+            const bool steady =
+                g_rates[slot].constant(g_windows) && g_rates[slot].wobble() <= 0.08;
             char text[40] = {};
 
             if (steady && std::fabs(ratio - std::round(ratio)) < 0.02 && ratio >= 0.98) {
@@ -419,17 +474,7 @@ bool install(Loader& loader, const std::string& config_path) {
     // приходится гадать, ждать ли дальше.
     write_report();
 
-    // Панель с кнопками: нажатие ставит в ленту отметку, и потом не нужно
-    // вспоминать, что происходило на такой-то секунде.
-    if (setting(config_path, "probe.markers") != "off") {
-        const std::string trouble = overlay::trouble();
-        if (trouble.empty()) {
-            overlay::open("nrz.probe", panel_html(), 16, 90, 300, 0, true);
-            MCBE_LOGI("панель отметок открыта");
-        } else {
-            MCBE_LOGW("панель отметок не открыть: %s", trouble.c_str());
-        }
-    }
+    g_want_panel = setting(config_path, "probe.markers") != "off";
 
     g_running.store(true);
     std::thread(worker).detach();
