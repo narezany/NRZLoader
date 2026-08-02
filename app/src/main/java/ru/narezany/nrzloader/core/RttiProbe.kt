@@ -44,6 +44,8 @@ object RttiProbe {
     data class Result(
         val libraryBytes: Long,
         val sectionsScanned: List<String>,
+        /** Почему секции разобрать не вышло, если не вышло. */
+        val sectionTrouble: String = "",
         val classNames: Int,
         val found: List<String>,
         val missing: List<String>,
@@ -55,10 +57,17 @@ object RttiProbe {
          * догадки о том, как классы называются, а общее их число ничего не
          * говорит о том, те ли это имена.
          */
+        /**
+         * Считается по найденным именам, а не по их числу.
+         *
+         * Общее число легко раздувается мусором — совпадение вроде «qQ» ничего
+         * не значит, — а вот ServerPlayer или ItemStackBase случайно не
+         * выпадают.
+         */
         val verdict: Verdict
             get() = when {
-                found.size >= 5 || classNames > 2000 -> Verdict.PRESENT
-                classNames > 0 -> Verdict.PARTIAL
+                found.size >= 5 -> Verdict.PRESENT
+                found.isNotEmpty() -> Verdict.PARTIAL
                 else -> Verdict.ABSENT
             }
 
@@ -79,8 +88,17 @@ object RttiProbe {
             // Имена ищутся только в данных. Две трети библиотеки — машинный
             // код, и узор «цифра, пара букв, ноль» встречается в нём тысячи
             // раз просто так; без этого ограничения счётчик врёт.
-            val sections = runCatching { ElfLayout.dataSections(ElfLayout.read(open)) }
-                .getOrDefault(emptyList())
+            //
+            // Если разобрать секции не вышло, это должно быть написано в
+            // отчёте: молчаливый откат на чтение всего файла один раз уже
+            // выдал мусор за результат.
+            var trouble = ""
+            val sections = try {
+                ElfLayout.dataSections(ElfLayout.read(open))
+            } catch (error: Throwable) {
+                trouble = error.message ?: error.toString()
+                emptyList()
+            }
 
             val tally = open().use { stream ->
                 if (sections.isEmpty()) {
@@ -98,6 +116,7 @@ object RttiProbe {
             return Result(
                 libraryBytes = entry.size,
                 sectionsScanned = sections.map { it.name },
+                sectionTrouble = trouble,
                 classNames = tally.names,
                 found = WANTED.filter { it in tally.found },
                 missing = WANTED.filterNot { it in tally.found },
@@ -124,6 +143,9 @@ object RttiProbe {
                     "просмотрено: " +
                         result.sectionsScanned.joinToString(", ").ifBlank { "весь файл" }
                 )
+                if (result.sectionTrouble.isNotBlank()) {
+                    appendLine("секции разобрать не вышло: ${result.sectionTrouble}")
+                }
                 appendLine()
                 appendLine("имён классов в данных: ${result.classNames}")
                 appendLine("из ожидаемых нашлось: ${result.found.size} из ${WANTED.size}")

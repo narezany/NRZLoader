@@ -1,3 +1,7 @@
+// Версия приложения берётся оттуда же, откуда её берут загрузчик и лаунчер.
+// Раньше в свойствах пакета висела 1.0, пока всё остальное ушло вперёд.
+val loaderVersion = file("../VERSION").readText().trim()
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +16,13 @@ android {
         applicationId = "ru.narezany.nrzloader"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // Каждая часть версии даёт свой разряд: 1.1.1 -> 10101.
+        versionCode = loaderVersion.split(".").let {
+            (it.getOrNull(0)?.toIntOrNull() ?: 0) * 10000 +
+                (it.getOrNull(1)?.toIntOrNull() ?: 0) * 100 +
+                (it.getOrNull(2)?.toIntOrNull() ?: 0)
+        }
+        versionName = loaderVersion
     }
 
     signingConfigs {
@@ -60,6 +69,12 @@ android {
 
     // The engine's tests run on a desktop JVM and are driven by a script.
     sourceSets["test"].java.srcDirs("src/test/java")
+}
+
+tasks.withType<Test> {
+    // Проверка на настоящей библиотеке включается свойством, чтобы обычный
+    // прогон не зависел от того, лежит ли она на этой машине.
+    System.getProperty("nrz.so")?.let { systemProperty("nrz.so", it) }
 }
 
 dependencies {

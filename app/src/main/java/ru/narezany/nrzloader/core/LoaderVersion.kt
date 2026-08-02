@@ -9,7 +9,7 @@ package ru.narezany.nrzloader.core
  * rather than trusting anyone to remember.
  */
 object LoaderVersion {
-    const val VALUE = "1.1.0"
+    const val VALUE = "1.1.1"
 
     /**
      * Compares dotted versions, returning a negative number, zero, or a

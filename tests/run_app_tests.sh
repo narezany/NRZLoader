@@ -89,9 +89,17 @@ in_header="$(sed -n 's/.*#define MCBE_LOADER_VERSION "\(.*\)".*/\1/p' \
 in_launcher="$(sed -n 's/.*const val VALUE = "\(.*\)".*/\1/p' \
     "$root/app/src/main/java/ru/narezany/nrzloader/core/LoaderVersion.kt")"
 
+in_gradle="$(sed -n 's/.*versionName = loaderVersion.*/из VERSION/p' \
+    "$root/app/build.gradle.kts")"
+
 echo "  VERSION        $declared"
 echo "  mod_api.h      $in_header"
 echo "  LoaderVersion  $in_launcher"
+echo "  пакет          ${in_gradle:-задана отдельно!}"
+if [ -z "$in_gradle" ]; then
+    echo "  FAIL  версия пакета задана отдельно от VERSION и разъедется"
+    exit 1
+fi
 if [ "$declared" != "$in_header" ] || [ "$declared" != "$in_launcher" ]; then
     echo "  FAIL  they disagree"
     exit 1

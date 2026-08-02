@@ -60,8 +60,10 @@ object ElfLayout {
             stream.skipFully(tableAt)
             stream.readFully(raw, 0, raw.size)
 
+            // sh_offset лежит по 0x18, sh_size по 0x20 — ровно так, как ниже
+            // читаются все остальные секции.
             val base = namesIndex * entrySize
-            namesRegion = readLong(raw, base + 0x18 + 8) to readLong(raw, base + 0x20 + 8)
+            namesRegion = readLong(raw, base + 0x18) to readLong(raw, base + 0x20)
         }
 
         // Таблица имён обычно лежит рядом с заголовками секций, но с какой

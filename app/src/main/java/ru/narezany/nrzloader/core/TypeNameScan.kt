@@ -35,7 +35,10 @@ object TypeNameScan {
             val short = name.substringAfterLast("::")
             if (name in wanted) found.add(name)
             if (short in wanted) found.add(short)
-            if (samples.size < 40) samples.add(name)
+            // В примеры идут только имена, по которым видно, что это имя.
+            // Двухбуквенные совпадения — как раз то, что сыплется само собой,
+            // и в отчёте они только сбивают с толку.
+            if (samples.size < 40 && (name.length >= 5 || "::" in name)) samples.add(name)
         }
     }
 
