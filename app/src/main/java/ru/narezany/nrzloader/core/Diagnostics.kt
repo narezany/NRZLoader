@@ -25,6 +25,14 @@ object Diagnostics {
         val detail: String,
         /** Что делать, если не сошлось. */
         val fix: String = "",
+        /**
+         * Это не поломка, а «ещё не случилось».
+         *
+         * Отчёт появляется только после запуска игры, и красный крест на нём
+         * до первого запуска пугает зря: человек читает его как ошибку и идёт
+         * искать несуществующую причину.
+         */
+        val waiting: Boolean = false,
     )
 
     fun run(context: Context): List<Check> {
@@ -108,24 +116,34 @@ object Diagnostics {
             fix = "Выберите класс ниже.",
         )
 
+        // Всё, что выше, лаунчер может проверить сам. Ниже — то, что зависит
+        // от запуска игры, и до него это не ошибка, а ожидание.
+        val everythingReady = checks.all { it.ok }
+
         checks += freshness(
             "Загрузчик запускался вместе с игрой",
             ModsFolder.log,
             "Запустите игру. Если файла нет и после запуска — загрузчик не поднялся.",
+            everythingReady,
         )
         checks += freshness(
             "Разведка писала отчёт",
             File(File(ModsFolder.root, "reports"), "slots.txt"),
             "Смотрите вкладку «Лог»: загрузчик пишет там, почему разведка не встала.",
+            everythingReady,
         )
 
         return checks
     }
 
     /** Насколько давно файл трогали: старый файл значит, что его не переписали. */
-    private fun freshness(title: String, file: File, fix: String): Check {
+    private fun freshness(title: String, file: File, fix: String, ready: Boolean): Check {
         if (!file.isFile) {
-            return Check(title, false, "файла нет", fix)
+            return if (ready) {
+                Check(title, false, "ждёт запуска игры", "", waiting = true)
+            } else {
+                Check(title, false, "файла нет", fix)
+            }
         }
 
         val age = System.currentTimeMillis() - file.lastModified()

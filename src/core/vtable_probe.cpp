@@ -46,7 +46,9 @@ std::string g_class;
 size_t g_slots = 0;
 void** g_vtable = nullptr;
 std::string g_report_path;
+std::string g_timeline_path;
 uint64_t g_previous[kMaxSlots] = {};
+uint64_t g_timeline_previous[kMaxSlots] = {};
 std::chrono::steady_clock::time_point g_started;
 std::chrono::steady_clock::time_point g_last_report;
 
@@ -137,12 +139,53 @@ bool make_writable(void* address, size_t length) {
                     PROT_READ | PROT_WRITE) == 0;
 }
 
+/**
+ * Дописывает, что произошло за последние секунды.
+ *
+ * Без этого выяснить, какой метод за что отвечает, можно было только так:
+ * сделать одно действие, переписать файл, сделать другое, переписать снова.
+ * Занятие изматывающее и требующее аккуратности, которой при игре не бывает.
+ *
+ * Здесь же остаётся просто играть. Лента пишется сама, и по ней потом видно,
+ * что в такую-то секунду сработали такие-то методы, — а что человек в ту
+ * секунду делал, он помнит и так.
+ */
+void append_timeline(double seconds) {
+    if (g_timeline_path.empty()) return;
+
+    std::ostringstream line;
+    bool anything = false;
+
+    for (size_t slot = 0; slot < g_slots && slot < kMaxSlots; ++slot) {
+        const uint64_t total = nrz_probe_slots[slot].count;
+        const uint64_t delta = total - g_timeline_previous[slot];
+        g_timeline_previous[slot] = total;
+        if (delta == 0) continue;
+
+        if (anything) line << ", ";
+        line << slot << "+" << delta;
+        anything = true;
+    }
+    if (!anything) return;
+
+    std::ofstream file(g_timeline_path, std::ios::app);
+    if (!file) return;
+    file << static_cast<long>(seconds) << " с: " << line.str() << "\n";
+}
+
 void worker() {
-    // Первый отчёт быстро, чтобы было видно, что счётчики живые; дальше реже.
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    const auto start = std::chrono::steady_clock::now();
+
+    // Отчёт пишется реже ленты: он для чтения целиком, а лента для того,
+    // чтобы поймать момент.
+    int step = 0;
     while (g_running.load()) {
-        write_report();
-        std::this_thread::sleep_for(std::chrono::seconds(15));
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+        append_timeline(seconds);
+        if (++step % 3 == 0) write_report();
     }
 }
 
@@ -268,6 +311,7 @@ bool install(Loader& loader, const std::string& config_path) {
     g_slots = slots;
     g_vtable = vtable;
     g_report_path = loader.data_directory() + "/reports/slots.txt";
+    g_timeline_path = loader.data_directory() + "/reports/slots-timeline.txt";
 
     // Папку создаём заранее: поток пишет туда каждые пятнадцать секунд, и
     // разбираться с этим на каждом заходе незачем.
@@ -275,6 +319,20 @@ bool install(Loader& loader, const std::string& config_path) {
 
     g_started = std::chrono::steady_clock::now();
     g_last_report = g_started;
+
+    // Лента начинается заново с каждым запуском игры: прошлая к нынешним
+    // счётчикам отношения не имеет.
+    {
+        std::ofstream fresh(g_timeline_path, std::ios::trunc);
+        if (fresh) {
+            fresh << "# Что срабатывало и когда, у класса " << wanted << ".\n"
+                  << "# Строка на каждые пять секунд: номер метода и сколько раз\n"
+                  << "# он сработал за эти пять секунд.\n"
+                  << "#\n"
+                  << "# Просто играйте. Что вы делали в такую-то секунду, вы помните,\n"
+                  << "# а что при этом вызывалось — написано здесь.\n\n";
+        }
+    }
 
     // Отчёт пишется сразу, ещё пустой: так видно, что счётчики встали, и не
     // приходится гадать, ждать ли дальше.

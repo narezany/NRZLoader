@@ -185,17 +185,24 @@ fun SettingsScreen(onLanguageChanged: () -> Unit) {
                 checks.forEach { check ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            (if (check.ok) "✓  " else "✗  ") + check.title,
+                            when {
+                                check.ok -> "✓  "
+                                check.waiting -> "·  "
+                                else -> "✗  "
+                            } + check.title,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (check.ok) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.error,
+                            color = when {
+                                check.ok -> MaterialTheme.colorScheme.onSurface
+                                check.waiting -> MaterialTheme.colorScheme.onSurfaceVariant
+                                else -> MaterialTheme.colorScheme.error
+                            },
                         )
                         Text(
                             "     " + check.detail,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (!check.ok && check.fix.isNotBlank()) {
+                        if (!check.ok && !check.waiting && check.fix.isNotBlank()) {
                             Text(
                                 "     → " + check.fix,
                                 style = MaterialTheme.typography.bodySmall,
