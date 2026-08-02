@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "loader.h"
+#include "mcbe/mod_api.h"
 #include "log.h"
 #include "overlay.h"
 #include "vtable_probe.h"
@@ -31,17 +32,23 @@ struct Signal {
     bool active = false;
 };
 
-// Значения по умолчанию — то, что нашлось разведкой на 1.26.23.1. На другой
-// сборке номера будут другими, поэтому их можно переопределить в настройках.
+/**
+ * Только то, что подтвердилось на записи однозначно.
+ *
+ * Первый состав был шире и оттого хуже. «Прыгает» стоял на методах, которые
+ * срабатывают раз в пятнадцать-сорок секунд сами по себе, — это сохранение
+ * мира, а не прыжок. «Использует» и «крутит камерой» горели почти всегда, а
+ * показатель, который горит всегда, не показывает ничего.
+ *
+ * Осталось пять, каждый из которых на присланной записи встречался только при
+ * своём действии и больше нигде.
+ */
 Signal g_signals[] = {
-    {"break", "ломает", "111", true, {}},
-    {"place", "ставит", "103,112", true, {}},
-    {"hit", "бьёт", "144", true, {}},
-    {"eat", "ест", "68,69", true, {}},
-    {"jump", "прыгает", "62,63", true, {}},
-    {"swim", "плывёт", "37", true, {}},
-    {"use", "использует", "149", true, {}},
-    {"look", "крутит камерой", "114,187", true, {}},
+    {"break", "breaking", "111", true, {}},
+    {"place", "placing", "103,112", true, {}},
+    {"hit", "attacking", "144", true, {}},
+    {"eat", "eating", "68,69", true, {}},
+    {"swim", "swimming", "37", true, {}},
 };
 
 constexpr size_t kSignalCount = sizeof(g_signals) / sizeof(g_signals[0]);
@@ -109,38 +116,36 @@ uint64_t sum(const std::vector<size_t>& slots) {
  */
 std::string page_html() {
     std::ostringstream page;
+
+    // Отладочный экран Minecraft — это просто белые строки с чёрной тенью
+    // поверх игры. Ни рамок, ни подложки: всё, что их изображает, выглядит
+    // приклеенным поверх, а не частью игры.
     page << "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
             "<style>"
-            "*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}"
-            "body{margin:0;font:600 11px/1.35 ui-monospace,Menlo,monospace;color:#dfe6ee}"
-            ".w{background:rgba(10,12,16,.62);backdrop-filter:blur(10px);border-radius:10px;"
-              "border:1px solid rgba(255,255,255,.07);padding:7px 9px;min-width:150px}"
-            ".r{display:flex;justify-content:space-between;gap:10px;padding:1px 0}"
-            ".k{opacity:.5}"
-            ".v{font-variant-numeric:tabular-nums}"
-            ".on{color:#6ee7a0}"
-            ".off{opacity:.28}"
-            ".s{height:1px;background:rgba(255,255,255,.08);margin:5px -9px}"
-            "</style><div class=w id=w>";
-
-    page << "<div class=r><span class=k>кадров/с</span><span class=v id=fps>—</span></div>"
-            "<div class=r><span class=k>тактов/с</span><span class=v id=tps>—</span></div>"
-            "<div class=r><span class=k>в мире</span><span class=v id=up>—</span></div>"
-            "<div class=s></div>";
+            "*{margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}"
+            "body{font:400 13px/1.42 ui-monospace,'Roboto Mono',monospace;color:#fff;"
+              "text-shadow:1px 1px 0 rgba(0,0,0,.85);white-space:nowrap;padding:2px 4px}"
+            ".o{color:#7cf29a}"
+            ".f{opacity:.42}"
+            "</style><div id=b></div>"
+            "<script>"
+            "var N=[";
 
     for (size_t index = 0; index < kSignalCount; ++index) {
-        page << "<div class=r id=r" << index << "><span class=k>" << g_signals[index].label
-             << "</span><span class=v id=c" << index << ">0</span></div>";
+        if (index != 0) page << ",";
+        page << "'" << g_signals[index].label << "'";
     }
 
-    page << "</div><script>"
+    // Строка собирается целиком в javascript: перебирать элементы по одному
+    // пять раз в секунду дороже, чем сложить строку и присвоить один раз.
+    page << "];"
             "function u(d){"
-              "document.getElementById('fps').textContent=d.f;"
-              "document.getElementById('tps').textContent=d.t;"
-              "document.getElementById('up').textContent=d.u;"
+              "var h='NRZLoader '+d.v+'<br>'+d.f+' fps, '+d.t+' tps, '+d.u+'<br><br>';"
               "for(var i=0;i<d.s.length;i++){"
-                "document.getElementById('r'+i).className='r '+(d.s[i][0]?'on':'off');"
-                "document.getElementById('c'+i).textContent=d.s[i][1]}}"
+                "var on=d.s[i][0];"
+                "h+='<span class='+(on?'o':'f')+'>['+(on?'x':' ')+'] '+N[i]+"
+                   "' '+d.s[i][1]+'</span><br>'}"
+              "document.getElementById('b').innerHTML=h}"
             "</script>";
     return page.str();
 }
@@ -169,7 +174,9 @@ bool install(Loader& loader, const std::string& config_path) {
         return false;
     }
 
-    const std::string failure = overlay::open("nrz.hud", page_html(), 8, 190, 190, 0, false);
+    // Ширина не задаётся: строки короткие, а окно по содержимому не режет
+    // хвосты — прежнее, заданное числом, обрезало их на любом экране.
+    const std::string failure = overlay::open("nrz.hud", page_html(), 6, 44, 0, 0, false);
     if (!failure.empty()) {
         MCBE_LOGW("окошко не открылось: %s", failure.c_str());
         return false;
@@ -203,7 +210,8 @@ void refresh() {
     g_tick_previous = ticks;
 
     std::ostringstream data;
-    data << "u({f:" << fps << ",t:" << tps << ",u:'" << static_cast<long>(alive) << "с',s:[";
+    data << "u({v:'" << MCBE_LOADER_VERSION << "',f:" << fps << ",t:" << tps << ",u:'"
+         << static_cast<long>(alive) << "s',s:[";
 
     for (size_t index = 0; index < kSignalCount; ++index) {
         Signal& signal = g_signals[index];

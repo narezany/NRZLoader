@@ -268,16 +268,25 @@ public final class Overlay {
             if (!touchable) view.setEnabled(false);
         }
 
+        /**
+         * Размеры приходят в тех единицах, в которых их задают люди, а не в
+         * точках экрана: на нынешних телефонах в сантиметре их под пятьсот, и
+         * окно шириной «190» получалось шириной с ноготь.
+         */
+        private int scale(int value) {
+            return Math.round(value * context.getResources().getDisplayMetrics().density);
+        }
+
         void show(int x, int y, int width, int height, boolean touchable) {
             layout = new WindowManager.LayoutParams(
-                    width > 0 ? width : WindowManager.LayoutParams.WRAP_CONTENT,
-                    height > 0 ? height : WindowManager.LayoutParams.WRAP_CONTENT,
+                    width > 0 ? scale(width) : WindowManager.LayoutParams.WRAP_CONTENT,
+                    height > 0 ? scale(height) : WindowManager.LayoutParams.WRAP_CONTENT,
                     overlayType(),
                     flags(touchable),
                     PixelFormat.TRANSLUCENT);
             layout.gravity = Gravity.TOP | Gravity.START;
-            layout.x = x;
-            layout.y = y;
+            layout.x = scale(x);
+            layout.y = scale(y);
 
             if (shown) {
                 manager.updateViewLayout(view, layout);
@@ -289,10 +298,10 @@ public final class Overlay {
 
         void move(int x, int y, int width, int height) {
             if (!shown || layout == null) return;
-            layout.x = x;
-            layout.y = y;
-            if (width > 0) layout.width = width;
-            if (height > 0) layout.height = height;
+            layout.x = scale(x);
+            layout.y = scale(y);
+            if (width > 0) layout.width = scale(width);
+            if (height > 0) layout.height = scale(height);
             manager.updateViewLayout(view, layout);
         }
 

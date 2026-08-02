@@ -147,10 +147,7 @@ const char* kDefaultConfig = R"(# NRZLoader settings
 #hud.place = 103,112
 #hud.hit = 144
 #hud.eat = 68,69
-#hud.jump = 62,63
 #hud.swim = 37
-#hud.use = 149
-#hud.look = 114,187
 #hud.frame = 35
 #hud.tick = 25
 )";
