@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.narezany.nrzloader.R
 import ru.narezany.nrzloader.core.GameLocator
+import ru.narezany.nrzloader.core.LoaderFile
 import ru.narezany.nrzloader.core.LoaderVersion
 import ru.narezany.nrzloader.core.ModsFolder
 import ru.narezany.nrzloader.core.PatchRunner
@@ -195,6 +196,11 @@ fun HomeScreen(
                     Text(stringResource(R.string.overlay_action))
                 }
             }
+
+            StatusCard(
+                title = stringResource(R.string.loader_hot_title),
+                body = stringResource(R.string.loader_hot_body),
+            )
 
             StatusCard(
                 title = stringResource(R.string.loader_ready_title),

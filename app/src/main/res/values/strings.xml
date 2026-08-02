@@ -79,4 +79,6 @@
     <string name="probe_body">Checks whether the game kept the names of its own classes. That answers whether mods can reach the gameplay code at all. Nothing is sent anywhere.</string>
     <string name="probe_action">Check</string>
     <string name="probe_running">Reading the game library, a minute or so…</string>
+    <string name="loader_hot_title">Loader updates without a rebuild</string>
+    <string name="loader_hot_body">A copy of the loader sits next to the mods, and the game prefers it. Updating the launcher is enough — just restart the game. Rebuilding is only needed when the package itself changes.</string>
 </resources>

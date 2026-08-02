@@ -4,7 +4,15 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Environment;
 import android.util.Log;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 /**
  * Loads the mod loader into the game process.
@@ -30,14 +38,7 @@ public final class Bootstrap extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        try {
-            System.loadLibrary("nrzloader");
-            Log.i(TAG, "loader library loaded");
-        } catch (Throwable error) {
-            // A failure here must not stop the game from starting.
-            Log.e(TAG, "could not load the loader: " + error);
-            return true;
-        }
+        if (!loadLoader()) return true;
 
         try {
             nativeAttach(getContext());
@@ -45,6 +46,80 @@ public final class Bootstrap extends ContentProvider {
             Log.e(TAG, "could not hand over the context: " + error);
         }
         return true;
+    }
+
+    /**
+     * Загружает загрузчик — по возможности тот, что лежит рядом с модами.
+     *
+     * Внутри игры лежит своя копия, вшитая при сборке. Но пересобирать
+     * полугигабайтный пакет ради правки в мегабайтной библиотеке — занятие
+     * тяжёлое, а на телефоне ещё и долгое. Поэтому сначала проверяется копия
+     * в папке загрузчика: лаунчер кладёт её туда при обновлении, и игре
+     * достаточно перезапуска.
+     *
+     * Прямо из общей памяти запускать код нельзя, поэтому файл сперва
+     * переносится в собственный каталог приложения. Это же значит, что игра
+     * исполняет код, лежащий там, куда может писать любое приложение с
+     * доступом к файлам, — ровно как и нативные моды, которые она и так
+     * оттуда берёт.
+     */
+    private boolean loadLoader() {
+        File external = new File(Environment.getExternalStorageDirectory(),
+                "NRZLoader/libnrzloader.so");
+
+        if (external.isFile() && external.length() > 0) {
+            try {
+                File own = copyIntoOwnDirectory(external);
+                System.load(own.getAbsolutePath());
+                Log.i(TAG, "loader taken from " + external + ", " + external.length() + " bytes");
+                return true;
+            } catch (Throwable error) {
+                Log.w(TAG, "could not use the loader from storage: " + error);
+            }
+        }
+
+        try {
+            System.loadLibrary("nrzloader");
+            Log.i(TAG, "loader library loaded from the package");
+            return true;
+        } catch (Throwable error) {
+            // A failure here must not stop the game from starting.
+            Log.e(TAG, "could not load the loader: " + error);
+            return false;
+        }
+    }
+
+    /** Переносит библиотеку туда, откуда её разрешено запускать. */
+    private File copyIntoOwnDirectory(File source) throws IOException {
+        File target = new File(getContext().getFilesDir(), "nrzloader-" + source.length() + ".so");
+
+        // Имя содержит размер, поэтому другая сборка попадёт в другой файл, а
+        // ту же самую копировать заново незачем.
+        if (target.isFile() && target.length() == source.length()) return target;
+
+        // Старые копии больше не нужны: они остаются занятыми, только пока
+        // игра не перезапущена.
+        File[] old = getContext().getFilesDir().listFiles();
+        if (old != null) {
+            for (File file : old) {
+                if (file.getName().startsWith("nrzloader-")) file.delete();
+            }
+        }
+
+        InputStream in = new FileInputStream(source);
+        try {
+            OutputStream out = new FileOutputStream(target);
+            try {
+                byte[] buffer = new byte[1 << 16];
+                int read;
+                while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+            } finally {
+                out.close();
+            }
+        } finally {
+            in.close();
+        }
+        return target;
     }
 
     @Override

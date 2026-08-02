@@ -76,4 +76,6 @@
     <string name="probe_body">检查游戏是否保留了自身类的名称。这决定了模组能否触及游戏逻辑。不会上传任何内容。</string>
     <string name="probe_action">检查</string>
     <string name="probe_running">正在读取游戏库，大约需要一分钟…</string>
+    <string name="loader_hot_title">加载器无需重新打包即可更新</string>
+    <string name="loader_hot_body">加载器副本放在模组旁边，游戏会优先使用它。更新启动器并重启游戏即可。只有安装包本身变化时才需要重新构建。</string>
 </resources>

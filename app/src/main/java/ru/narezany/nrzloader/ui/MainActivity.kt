@@ -15,6 +15,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import ru.narezany.nrzloader.core.AppLocale
+import ru.narezany.nrzloader.core.LoaderFile
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -27,6 +28,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         askForNotifications()
+
+        // Свежий загрузчик кладётся рядом с модами при каждом запуске: игра
+        // предпочтёт его тому, что вшит внутрь неё, и обновление лаунчера
+        // обойдётся без пересборки игры.
+        if (MainActivity.hasStorageAccess()) LoaderFile.refresh(this)
         setContent {
             NrzTheme {
                 NrzApp(
