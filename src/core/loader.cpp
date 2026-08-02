@@ -135,6 +135,24 @@ const char* kDefaultConfig = R"(# NRZLoader settings
 # секунду это тик, один при ударе — обработка урона.
 # Адреса таблиц лаунчер кладёт в config/vtables.conf сам.
 #probe.class = Actor
+
+# Окошко поверх игры с тем, что загрузчик про неё знает: прыгает ли игрок,
+# плывёт ли, ломает ли блок, сколько чего сделал. Работает, когда включена
+# разведка: числа берутся из её счётчиков.
+#hud = off
+#
+# Номера методов для окошка. У каждой сборки игры они свои — эти найдены
+# разведкой на 1.26.23.1. Как узнать свои, написано в reports/slots.txt.
+#hud.break = 111
+#hud.place = 103,112
+#hud.hit = 144
+#hud.eat = 68,69
+#hud.jump = 62,63
+#hud.swim = 37
+#hud.use = 149
+#hud.look = 114,187
+#hud.frame = 35
+#hud.tick = 25
 )";
 
 void write_default_config(const std::string& path) {

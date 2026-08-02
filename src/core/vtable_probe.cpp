@@ -17,6 +17,7 @@
 #include "loader.h"
 #include "log.h"
 #include "module.h"
+#include "hud.h"
 #include "overlay.h"
 
 extern "C" {
@@ -53,6 +54,7 @@ uint64_t g_timeline_previous[kMaxSlots] = {};
 std::chrono::steady_clock::time_point g_started;
 std::chrono::steady_clock::time_point g_last_report;
 bool g_want_panel = false;
+std::string g_config_path;
 int g_windows = 0;
 
 /**
@@ -242,11 +244,20 @@ void worker() {
         }
     }
 
+    hud::install(Loader::instance(), g_config_path);
+
     // Отчёт пишется реже ленты: он для чтения целиком, а лента для того,
     // чтобы поймать момент.
     int step = 0;
     while (g_running.load()) {
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        // Окошко обновляется впятеро чаще ленты: пять секунд задержки
+        // превращают показометр в бесполезную табличку.
+        for (int tick = 0; tick < 25 && g_running.load(); ++tick) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            hud::refresh();
+        }
+        if (!g_running.load()) break;
+
         const double seconds =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
@@ -319,6 +330,12 @@ void mark(const std::string& label) {
 
     MCBE_LOGI("отметка: %s", label.c_str());
 }
+
+uint64_t counter(size_t slot) {
+    return slot < kMaxSlots ? nrz_probe_slots[slot].count : 0;
+}
+
+bool running() { return g_running.load(); }
 
 void write_report() {
     if (g_vtable == nullptr || g_report_path.empty()) return;
@@ -475,6 +492,7 @@ bool install(Loader& loader, const std::string& config_path) {
     write_report();
 
     g_want_panel = setting(config_path, "probe.markers") != "off";
+    g_config_path = config_path;
 
     g_running.store(true);
     std::thread(worker).detach();

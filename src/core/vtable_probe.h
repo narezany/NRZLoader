@@ -13,6 +13,8 @@
 // обновлением.
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace mcbe {
@@ -37,6 +39,12 @@ void write_report();
  * перед действием — и в ленте ровно на этом месте написано, что дальше.
  */
 void mark(const std::string& label);
+
+// Сколько раз сработал этот метод. Ноль, если разведка не запущена.
+uint64_t counter(size_t slot);
+
+// Стоят ли счётчики.
+bool running();
 
 }  // namespace probe
 }  // namespace mcbe

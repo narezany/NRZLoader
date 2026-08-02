@@ -33,6 +33,7 @@ set(LOADER_SOURCES
     src/hook/arm64_reloc.cpp
     src/hook/vtable_stubs.S
     src/core/vtable_probe.cpp
+    src/core/hud.cpp
 )
 
 add_library(nrzloader SHARED ${LOADER_SOURCES})
