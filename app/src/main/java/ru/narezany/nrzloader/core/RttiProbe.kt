@@ -261,6 +261,10 @@ object RttiProbe {
         val file = File(File(ModsFolder.root, "reports"), "vtables.txt")
         file.parentFile?.mkdirs()
 
+        // Рядом — копия туда, где её читает сам загрузчик при запуске игры.
+        val forLoader = File(ModsFolder.config, "vtables.conf")
+        forLoader.parentFile?.mkdirs()
+
         file.writeText(
             buildString {
                 appendLine("# NRZLoader ${LoaderVersion.VALUE} — таблицы виртуальных методов")
@@ -288,6 +292,7 @@ object RttiProbe {
                     }
             }
         )
+        runCatching { file.copyTo(forLoader, overwrite = true) }
         file
     }.getOrNull()
 }

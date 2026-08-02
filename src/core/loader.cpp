@@ -13,6 +13,7 @@
 #include "mod_manifest.h"
 #include "screen_fx.h"
 #include "ui_bridge.h"
+#include "vtable_probe.h"
 #include "v8_bridge.h"
 #include "log.h"
 #include "paths.h"
@@ -127,6 +128,13 @@ const char* kDefaultConfig = R"(# NRZLoader settings
 # Names: pixelate, fisheye, wave, glitch, chroma, crt, vignette, grayscale,
 # invert. A mod can change these while the game runs through nrz.fx.set().
 #screen.effects = crt=0.6
+
+# Разведка виртуальных методов. Имён у них нет — их вырезали и из клиента, и
+# из сервера, — но по тому, когда метод зовут, видно, что он делает. Укажите
+# класс, поиграйте полминуты и прочтите reports/slots.txt: двадцать вызовов в
+# секунду это тик, один при ударе — обработка урона.
+# Адреса таблиц лаунчер кладёт в config/vtables.conf сам.
+#probe.class = Actor
 )";
 
 void write_default_config(const std::string& path) {
@@ -401,6 +409,10 @@ void Loader::start() {
         const std::string effects = read_setting(bindings_file_, "screen.effects", "");
         if (!effects.empty()) fx::set(effects);
     }
+
+    // Счётчики на таблицу — последними: они подменяют указатели в игре, и
+    // включаются только когда об этом попросили явно.
+    probe::install(*this, bindings_file_);
 
     load_mods();
     events_.dispatch(MCBE_EVENT_READY, nullptr);
