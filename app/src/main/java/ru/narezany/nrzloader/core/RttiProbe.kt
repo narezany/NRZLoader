@@ -175,6 +175,9 @@ object RttiProbe {
                 when {
                     tables == null -> appendLine("  разобрать не вышло")
                     tables.found.isNotEmpty() -> {
+                        tables.relocations?.let {
+                            appendLine("  список перемещений: ${it.kind}, подставлено ${it.applied}")
+                        }
                         tables.found.forEach {
                             appendLine(
                                 "  %-16s таблица 0x%x, методов %d"
@@ -187,6 +190,12 @@ object RttiProbe {
                     }
                     else -> {
                         appendLine("  не найдено — ${tables.note}")
+                        tables.relocations?.let {
+                            appendLine(
+                                "  список перемещений: ${it.kind}, подставлено ${it.applied}" +
+                                    if (it.note.isBlank()) "" else " (${it.note})"
+                            )
+                        }
                         appendLine("  указателей просмотрено: ${tables.pointersRead}")
                         appendLine("  из них ненулевых: ${tables.nonZeroPointers}")
                         appendLine(

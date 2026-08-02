@@ -39,6 +39,8 @@ object VtableFinder {
         val pointersRead: Long,
         val nonZeroPointers: Long,
         val note: String,
+        /** Какой список перемещений нашёлся и сколько значений подставлено. */
+        val relocations: Relocations.Outcome? = null,
     ) {
         /**
          * Указатели в файле есть, а не подставляются при загрузке.
@@ -77,6 +79,11 @@ object VtableFinder {
 
         val blocks = readSections(open, pointerSections)
 
+        // В файле указателей почти нет: компоновщик заменил их нулями, а
+        // настоящие значения лежат отдельным списком. Без него дальше идти
+        // не по чему.
+        val relocations = Relocations.apply(open, sections, blocks)
+
         // Шаг второй: кто ссылается на имя. Это второе поле typeinfo, значит
         // сама структура начинается на восемь байт раньше.
         val byAddress = addresses.entries.associate { it.value to it.key }
@@ -99,7 +106,7 @@ object VtableFinder {
                 "данные почти сплошь нули: адреса подставляются при загрузке, " +
                     "по файлу их не пройти"
             }
-            return Report(addresses, emptyList(), pointersRead, nonZero, note)
+            return Report(addresses, emptyList(), pointersRead, nonZero, note, relocations)
         }
 
         // Шаг третий: кто ссылается на typeinfo. Это второе поле таблицы
@@ -125,6 +132,7 @@ object VtableFinder {
             pointersRead = pointersRead,
             nonZeroPointers = nonZero,
             note = "",
+            relocations = relocations,
         )
     }
 
@@ -194,13 +202,11 @@ object VtableFinder {
         return addresses
     }
 
-    private class Block(val address: Long, val bytes: ByteArray)
-
     private fun readSections(
         open: () -> InputStream,
         sections: List<ElfLayout.Section>,
-    ): List<Block> {
-        val blocks = ArrayList<Block>()
+    ): List<Relocations.Target> {
+        val blocks = ArrayList<Relocations.Target>()
         open().use { stream ->
             var position = 0L
             for (section in sections) {
@@ -208,14 +214,17 @@ object VtableFinder {
                 val body = ByteArray(section.size.toInt())
                 stream.readFully(body, 0, body.size)
                 position = section.offset + body.size
-                blocks.add(Block(section.address, body))
+                blocks.add(Relocations.Target(section.address, body))
             }
         }
         return blocks
     }
 
     /** Каждое выровненное восьмибайтовое значение и адрес, где оно лежит. */
-    private inline fun forEachPointer(blocks: List<Block>, action: (Long, Long) -> Unit) {
+    private inline fun forEachPointer(
+        blocks: List<Relocations.Target>,
+        action: (Long, Long) -> Unit,
+    ) {
         for (block in blocks) {
             var at = 0
             while (at + 8 <= block.bytes.size) {
@@ -232,7 +241,7 @@ object VtableFinder {
      * что случайно указывает то же значение.
      */
     private fun countMethods(
-        blocks: List<Block>,
+        blocks: List<Relocations.Target>,
         vtable: Long,
         sections: List<ElfLayout.Section>,
     ): Int {
