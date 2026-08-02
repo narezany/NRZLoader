@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <chrono>
 #include <cstring>
 #include <fstream>
@@ -45,6 +46,42 @@ std::string g_class;
 size_t g_slots = 0;
 void** g_vtable = nullptr;
 std::string g_report_path;
+uint64_t g_previous[kMaxSlots] = {};
+std::chrono::steady_clock::time_point g_started;
+std::chrono::steady_clock::time_point g_last_report;
+
+/**
+ * Сколько раз за игровой такт срабатывает всё остальное.
+ *
+ * Игра живёт тактами по двадцать в секунду, и почти всё, что она делает,
+ * привязано к ним: что-то раз за такт, что-то трижды за кадр. Поэтому если
+ * взять верное число тактов за основу, остальные счётчики поделятся на него
+ * нацело — а неверное такого не даст. Это и есть способ найти основу, не
+ * спрашивая у игры, сколько она проработала.
+ */
+uint64_t find_base(const std::vector<std::pair<uint64_t, size_t>>& hits) {
+    uint64_t best = 0;
+    size_t best_score = 0;
+
+    for (const auto& candidate : hits) {
+        if (candidate.first < 100) continue;
+
+        size_t score = 0;
+        for (const auto& other : hits) {
+            const double ratio = static_cast<double>(other.first) / candidate.first;
+            if (ratio < 0.999) continue;
+            if (std::fabs(ratio - std::round(ratio)) < 0.005) ++score;
+        }
+
+        // При равенстве берётся меньшее: такт делит и кадры, и всё прочее, а
+        // кадры такт уже не делят.
+        if (score > best_score || (score == best_score && best != 0 && candidate.first < best)) {
+            best_score = score;
+            best = candidate.first;
+        }
+    }
+    return best_score >= 3 ? best : 0;
+}
 
 std::string trim(const std::string& text) {
     const size_t begin = text.find_first_not_of(" \t\r\n");
@@ -129,13 +166,54 @@ void write_report() {
     }
     std::sort(hits.rbegin(), hits.rend());
 
-    out << "сработало мест: " << hits.size() << "\n\n";
+    const auto now = std::chrono::steady_clock::now();
+    const double seconds =
+        std::chrono::duration<double>(now - g_started).count();
+    const double window =
+        std::chrono::duration<double>(now - g_last_report).count();
+    g_last_report = now;
+
+    const uint64_t base = find_base(hits);
+
+    out << "сработало мест: " << hits.size() << "\n"
+        << "игра идёт: " << static_cast<long>(seconds) << " с\n";
+    if (base != 0) {
+        out << "такт игры: " << base << " раз, это "
+            << static_cast<long>(base / std::max(seconds, 1.0) + 0.5) << " в секунду\n";
+    }
+    out << "\n";
+
+    char line[160] = {};
     for (const auto& hit : hits) {
-        out << "  слот " << hit.second << " — вызовов " << hit.first << "\n";
+        const size_t slot = hit.second;
+        const uint64_t total = hit.first;
+        const uint64_t delta = total - g_previous[slot];
+        g_previous[slot] = total;
+
+        std::string per_tick = "—";
+        if (base != 0) {
+            const double ratio = static_cast<double>(total) / base;
+            char text[32] = {};
+            if (std::fabs(ratio - std::round(ratio)) < 0.005 && ratio >= 0.999) {
+                snprintf(text, sizeof(text), "%.0f за такт", std::round(ratio));
+            } else {
+                snprintf(text, sizeof(text), "%.2f за такт", ratio);
+            }
+            per_tick = text;
+        }
+
+        snprintf(line, sizeof(line), "  слот %-4zu %10llu  %-14s  за последние %2.0f с: %llu\n",
+                 slot, static_cast<unsigned long long>(total), per_tick.c_str(), window,
+                 static_cast<unsigned long long>(delta));
+        out << line;
     }
 
     if (hits.empty()) {
         out << "  пока ни одного. Зайдите в мир и подвигайтесь.\n";
+    } else {
+        out << "\nРовное число за такт — метод, который зовут при каждом такте.\n"
+            << "Столбец справа считается заново каждые пятнадцать секунд: сделайте\n"
+            << "что-то одно и посмотрите, у какого слота там появилось число.\n";
     }
 
     std::ofstream file(g_report_path, std::ios::trunc);
@@ -186,6 +264,8 @@ bool install(Loader& loader, const std::string& config_path) {
     // разбираться с этим на каждом заходе незачем.
     ::mkdir((loader.data_directory() + "/reports").c_str(), 0775);
 
+    g_started = std::chrono::steady_clock::now();
+    g_last_report = g_started;
     g_running.store(true);
     std::thread(worker).detach();
 
