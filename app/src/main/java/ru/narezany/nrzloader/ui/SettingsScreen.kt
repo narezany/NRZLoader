@@ -130,6 +130,12 @@ fun SettingsScreen(onLanguageChanged: () -> Unit) {
                                             "из ожидаемых: ${result.found.size} " +
                                                 "(${result.found.take(8).joinToString(", ")})"
                                         )
+                                        val tables = result.vtables
+                                        if (tables != null && tables.found.isNotEmpty()) {
+                                            appendLine("таблиц найдено: ${tables.found.size}")
+                                        } else if (tables != null) {
+                                            appendLine("таблиц нет: ${tables.note}")
+                                        }
                                         report?.let { appendLine(it.absolutePath) }
                                     }
                                 }.getOrElse { "не вышло: ${it.message}" }

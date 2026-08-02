@@ -51,6 +51,8 @@ object RttiProbe {
         val missing: List<String>,
         val anchors: Map<String, Int>,
         val samples: List<String>,
+        /** Найденные таблицы виртуальных методов, если до них дошло. */
+        val vtables: VtableFinder.Report? = null,
     ) {
         /**
          * Признаков два, и одного мало: список ожидаемых имён — всё-таки
@@ -113,6 +115,13 @@ object RttiProbe {
                 }
             }
 
+            // Второй заход: от найденных имён к самим таблицам. Это заодно
+            // и проверка первого — на случайное совпадение строки никто не
+            // ссылается, а на настоящее имя ссылается typeinfo.
+            val vtables = runCatching {
+                VtableFinder.run(open, WANTED.toSet())
+            }.getOrNull()
+
             return Result(
                 libraryBytes = entry.size,
                 sectionsScanned = sections.map { it.name },
@@ -122,6 +131,7 @@ object RttiProbe {
                 missing = WANTED.filterNot { it in tally.found },
                 anchors = tally.anchors,
                 samples = tally.samples.toList(),
+                vtables = vtables,
             )
         }
     }
@@ -158,6 +168,33 @@ object RttiProbe {
                 appendLine()
                 appendLine("примеры найденных имён:")
                 result.samples.forEach { appendLine("  $it") }
+                appendLine()
+
+                appendLine("таблицы виртуальных методов:")
+                val tables = result.vtables
+                when {
+                    tables == null -> appendLine("  разобрать не вышло")
+                    tables.found.isNotEmpty() -> {
+                        tables.found.forEach {
+                            appendLine(
+                                "  %-16s таблица 0x%x, методов %d"
+                                    .format(it.name, it.vtableAddress, it.methodSlots)
+                            )
+                        }
+                        appendLine()
+                        appendLine("  указателей просмотрено: ${tables.pointersRead}")
+                        appendLine("  из них ненулевых: ${tables.nonZeroPointers}")
+                    }
+                    else -> {
+                        appendLine("  не найдено — ${tables.note}")
+                        appendLine("  указателей просмотрено: ${tables.pointersRead}")
+                        appendLine("  из них ненулевых: ${tables.nonZeroPointers}")
+                        appendLine(
+                            "  адреса лежат в файле: " +
+                                if (tables.pointersAreInTheFile) "да" else "нет"
+                        )
+                    }
+                }
                 appendLine()
                 appendLine(
                     when (result.verdict) {
