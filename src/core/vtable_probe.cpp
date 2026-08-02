@@ -224,14 +224,23 @@ void write_report() {
 
 bool install(Loader& loader, const std::string& config_path) {
     const std::string wanted = setting(config_path, "probe.class");
-    if (wanted.empty()) return false;
+    if (wanted.empty()) {
+        // Сказать об этом стоит: иначе непонятно, выключено оно или сломалось.
+        MCBE_LOGI("разведка методов выключена; чтобы включить, добавьте в %s строку "
+                  "probe.class = LocalPlayer",
+                  config_path.c_str());
+        return false;
+    }
+    MCBE_LOGI("разведка методов: класс %s", wanted.c_str());
 
     const std::string tables = loader.data_directory() + "/config/vtables.conf";
 
     uintptr_t link_address = 0;
     size_t slots = 0;
     if (!lookup_vtable(tables, wanted, link_address, slots)) {
-        MCBE_LOGW("нет записи vtable.%s в %s", wanted.c_str(), tables.c_str());
+        MCBE_LOGW("нет записи vtable.%s в %s — нажмите «Проверить» в лаунчере, "
+                  "он этот файл и пишет",
+                  wanted.c_str(), tables.c_str());
         return false;
     }
 
@@ -266,6 +275,11 @@ bool install(Loader& loader, const std::string& config_path) {
 
     g_started = std::chrono::steady_clock::now();
     g_last_report = g_started;
+
+    // Отчёт пишется сразу, ещё пустой: так видно, что счётчики встали, и не
+    // приходится гадать, ждать ли дальше.
+    write_report();
+
     g_running.store(true);
     std::thread(worker).detach();
 
