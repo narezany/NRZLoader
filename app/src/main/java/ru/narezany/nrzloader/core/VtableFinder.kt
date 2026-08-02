@@ -24,6 +24,16 @@ object VtableFinder {
     /** Больше этого в память не берём: телефону такое не выдержать. */
     private const val MAX_BUFFERED = 96L * 1024 * 1024
 
+    /**
+     * На typeinfo ссылаются из двух разных мест, и это разные находки.
+     *
+     * Из таблицы виртуальных методов — тогда сразу за ссылкой идут адреса
+     * самих методов. И из typeinfo класса-наследника, у которого поле
+     * «базовый класс» указывает сюда же, — тогда за ссылкой методов нет,
+     * зато рядом лежит имя наследника.
+     */
+    enum class Kind { VTABLE, DERIVED, UNKNOWN }
+
     data class Found(
         val name: String,
         val nameAddress: Long,
@@ -31,6 +41,9 @@ object VtableFinder {
         val vtableAddress: Long,
         /** Сколько подряд идущих значений похожи на адреса кода. */
         val methodSlots: Int,
+        val kind: Kind = Kind.UNKNOWN,
+        /** Имя наследника, когда находка — его typeinfo. */
+        val derived: String = "",
     )
 
     data class Report(
@@ -65,8 +78,10 @@ object VtableFinder {
             return Report(emptyMap(), emptyList(), 0, 0, "в библиотеке нет нужных секций")
         }
 
-        // Шаг первый: где лежит каждое искомое имя.
-        val addresses = locateNames(open, rodata, wanted)
+        // Шаг первый: где лежит каждое имя. Запоминаются все, а не только
+        // искомые: по ним потом читаются имена классов-наследников.
+        val allNames = HashMap<Long, String>()
+        val addresses = locateNames(open, rodata, wanted, allNames)
         if (addresses.isEmpty()) {
             return Report(emptyMap(), emptyList(), 0, 0, "ни одного имени не нашлось")
         }
@@ -109,19 +124,36 @@ object VtableFinder {
             return Report(addresses, emptyList(), pointersRead, nonZero, note, relocations)
         }
 
-        // Шаг третий: кто ссылается на typeinfo. Это второе поле таблицы
-        // виртуальных методов, а сразу за ним начинаются сами методы.
+        // Шаг третий: кто ссылается на typeinfo. Из таблицы методов — тогда
+        // сразу за ссылкой идут методы. Из typeinfo наследника — тогда
+        // методов нет, а на восемь байт раньше лежит указатель на его имя.
         val found = ArrayList<Found>()
         forEachPointer(blocks) { at, value ->
             val name = typeInfos[value] ?: return@forEachPointer
+
             val vtable = at + 8
+            val slots = countMethods(blocks, vtable, sections)
+
+            val derived = if (slots == 0) {
+                val nameSlot = pointerAt(blocks, at - 8)
+                allNames[nameSlot].orEmpty()
+            } else {
+                ""
+            }
+
             found.add(
                 Found(
                     name = name,
                     nameAddress = addresses.getValue(name),
                     typeInfoAddress = value,
                     vtableAddress = vtable,
-                    methodSlots = countMethods(blocks, vtable, sections),
+                    methodSlots = slots,
+                    kind = when {
+                        slots > 0 -> Kind.VTABLE
+                        derived.isNotEmpty() -> Kind.DERIVED
+                        else -> Kind.UNKNOWN
+                    },
+                    derived = derived,
                 )
             )
         }
@@ -150,6 +182,7 @@ object VtableFinder {
         open: () -> InputStream,
         rodata: List<ElfLayout.Section>,
         wanted: Set<String>,
+        allNames: MutableMap<Long, String>,
     ): Map<String, Long> {
         val addresses = HashMap<String, Long>()
         val window = 1 shl 20
@@ -178,6 +211,11 @@ object VtableFinder {
                         val name = TypeNameScan.nameAt(buffer, at, filled)
                             ?: TypeNameScan.nestedAt(buffer, at, filled)
                             ?: continue
+
+                        val inSectionHere = consumed - carried + at
+                        if (allNames.size < 200_000) {
+                            allNames[section.address + inSectionHere] = name
+                        }
 
                         // typeinfo ссылается на начало записи, то есть на
                         // длину, а не на первую букву имени.
@@ -262,6 +300,14 @@ object VtableFinder {
             at += 8
         }
         return slots
+    }
+
+    /** Значение по адресу, если он попадает в прочитанные куски. */
+    private fun pointerAt(blocks: List<Relocations.Target>, address: Long): Long {
+        val block = blocks.firstOrNull {
+            address >= it.address && address + 8 <= it.address + it.bytes.size
+        } ?: return 0
+        return readLong(block.bytes, (address - block.address).toInt())
     }
 
     private fun readLong(data: ByteArray, at: Int): Long {

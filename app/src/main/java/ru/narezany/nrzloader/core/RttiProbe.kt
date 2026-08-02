@@ -170,41 +170,67 @@ object RttiProbe {
                 result.samples.forEach { appendLine("  $it") }
                 appendLine()
 
-                appendLine("таблицы виртуальных методов:")
                 val tables = result.vtables
+                appendLine("таблицы виртуальных методов:")
                 when {
                     tables == null -> appendLine("  разобрать не вышло")
-                    tables.found.isNotEmpty() -> {
+                    tables.found.isEmpty() -> {
+                        appendLine("  не найдено — ${tables.note}")
                         tables.relocations?.let {
                             appendLine("  список перемещений: ${it.kind}, подставлено ${it.applied}")
                         }
-                        tables.found.forEach {
-                            appendLine(
-                                "  %-16s таблица 0x%x, методов %d"
-                                    .format(it.name, it.vtableAddress, it.methodSlots)
-                            )
-                        }
-                        appendLine()
-                        appendLine("  указателей просмотрено: ${tables.pointersRead}")
-                        appendLine("  из них ненулевых: ${tables.nonZeroPointers}")
+                        appendLine("  указателей: ${tables.pointersRead}, " +
+                            "ненулевых ${tables.nonZeroPointers}")
                     }
                     else -> {
-                        appendLine("  не найдено — ${tables.note}")
                         tables.relocations?.let {
+                            appendLine("  список перемещений: ${it.kind}, подставлено ${it.applied}")
+                        }
+                        appendLine("  указателей: ${tables.pointersRead}, " +
+                            "ненулевых ${tables.nonZeroPointers}")
+                        appendLine()
+
+                        // Настоящая таблица у класса одна: та, за которой
+                        // больше всего методов. Остальные — вторые таблицы
+                        // при множественном наследовании.
+                        val vtables = tables.found
+                            .filter { it.kind == VtableFinder.Kind.VTABLE }
+                            .groupBy { it.name }
+
+                        vtables.entries.sortedBy { it.key }.forEach { (name, all) ->
+                            val main = all.maxByOrNull { it.methodSlots } ?: return@forEach
                             appendLine(
-                                "  список перемещений: ${it.kind}, подставлено ${it.applied}" +
-                                    if (it.note.isBlank()) "" else " (${it.note})"
+                                "  %-14s 0x%08x, методов %d%s".format(
+                                    name, main.vtableAddress, main.methodSlots,
+                                    if (all.size > 1) " (ещё ${all.size - 1} вторичных)" else ""
+                                )
                             )
                         }
-                        appendLine("  указателей просмотрено: ${tables.pointersRead}")
-                        appendLine("  из них ненулевых: ${tables.nonZeroPointers}")
-                        appendLine(
-                            "  адреса лежат в файле: " +
-                                if (tables.pointersAreInTheFile) "да" else "нет"
-                        )
+
+                        // Ссылка на typeinfo без методов за ней — это класс,
+                        // унаследованный от найденного. Так вычитывается всё
+                        // семейство.
+                        val children = tables.found
+                            .filter { it.kind == VtableFinder.Kind.DERIVED }
+                            .groupBy({ it.name }, { it.derived })
+                            .mapValues { it.value.distinct().sorted() }
+
+                        if (children.isNotEmpty()) {
+                            appendLine()
+                            appendLine("наследники:")
+                            children.entries.sortedByDescending { it.value.size }
+                                .forEach { (base, kids) ->
+                                    appendLine("  $base — ${kids.size}")
+                                    kids.take(24).forEach { appendLine("      $it") }
+                                    if (kids.size > 24) {
+                                        appendLine("      … и ещё ${kids.size - 24}")
+                                    }
+                                }
+                        }
                     }
                 }
                 appendLine()
+
                 appendLine(
                     when (result.verdict) {
                         Result.Verdict.PRESENT ->
@@ -216,6 +242,50 @@ object RttiProbe {
                             "RTTI вырезан. Остаются строки-якоря."
                     }
                 )
+            }
+        )
+        file
+    }.getOrNull()
+
+    /**
+     * Адреса в виде, который читает сам загрузчик.
+     *
+     * Отчёт выше — для человека, а это для дела: строки вида
+     * `vtable.Actor = 0x13891da0 138` кладутся в config, и мод может
+     * перехватить метод по номеру, не зная ни одного имени функции.
+     */
+    fun writeTable(result: Result): File? = runCatching {
+        val tables = result.vtables ?: return@runCatching null
+        if (tables.found.isEmpty()) return@runCatching null
+
+        val file = File(File(ModsFolder.root, "reports"), "vtables.txt")
+        file.parentFile?.mkdirs()
+
+        file.writeText(
+            buildString {
+                appendLine("# NRZLoader ${LoaderVersion.VALUE} — таблицы виртуальных методов")
+                appendLine("# класс = адрес таблицы, число методов")
+                appendLine("# Адреса от начала библиотеки; загрузчик прибавит, куда её положили.")
+                appendLine()
+
+                tables.found
+                    .filter { it.kind == VtableFinder.Kind.VTABLE }
+                    .groupBy { it.name }
+                    .entries.sortedBy { it.key }
+                    .forEach { (name, all) ->
+                        val main = all.maxByOrNull { it.methodSlots } ?: return@forEach
+                        appendLine("vtable.%s = 0x%x %d".format(name, main.vtableAddress,
+                            main.methodSlots))
+                    }
+
+                appendLine()
+                appendLine("# наследники, по одному в строке")
+                tables.found
+                    .filter { it.kind == VtableFinder.Kind.DERIVED }
+                    .groupBy({ it.name }, { it.derived })
+                    .forEach { (base, kids) ->
+                        kids.distinct().sorted().forEach { appendLine("child.$base = $it") }
+                    }
             }
         )
         file

@@ -114,6 +114,7 @@ fun SettingsScreen(onLanguageChanged: () -> Unit) {
                                         ?: return@runCatching null
                                     val result = RttiProbe.run(game)
                                     val report = RttiProbe.writeReport(result, game)
+                                    RttiProbe.writeTable(result)
                                     buildString {
                                         appendLine(
                                             when (result.verdict) {
